@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -22,16 +23,20 @@ usage: zm [-as ROLE | -rc FILE] COMMAND [flags]
   send -c CHANNEL -t TOPIC [-to NAME,NAME] [TEXT]   post (TEXT or stdin), @-mentioning -to
   inbox [-peek]                                     unread @-mentions of me; marks them read
   read -c CHANNEL -t TOPIC [-n 30]                  recent history of a topic
+  wait -c CHANNEL -t TOPIC [-timeout 1h]            block until someone else posts there; print it
+                                                    (exit 3 on timeout)
   ack ID                                            react ✅ ("taken") to a message
   register [-session S] [-host H]                   ask the daemon to wake session S on mentions of me
   unregister [-session S] [-host H]                 stop that
-  join CHANNEL                                      ask the daemon to subscribe me to CHANNEL
+  join CHANNEL                                      ask the daemon to add me (and the owner) to CHANNEL,
+                                                    creating it as private if needed
   whoami                                            print my Zulip identity
   daemon [-host H]                                  watch Zulip and wake registered sessions
 
 ROLE picks ~/.config/zm/ROLE.zuliprc (default: $ZM_AS). The file is a standard zuliprc
-([api] email, key, site; or key_cmd = a command printing the key) plus
-[zm] registry = CHANNEL for register/unregister/join/daemon.
+([api] email, key, site; or key_cmd = a command printing the key) plus a [zm] section:
+porter = EMAIL of the daemon's bot (register/unregister/join are DMs to it), and for the
+daemon itself owner = EMAIL of the human added to every channel it creates.
 `
 
 var safe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
@@ -139,6 +144,14 @@ func run(args []string) error {
 		for _, m := range msgs {
 			printMsg(m)
 		}
+	case "wait":
+		ch := f.String("c", "", "channel")
+		topic := f.String("t", "", "topic")
+		timeout := f.Duration("timeout", time.Hour, "give up after")
+		if err := f.Parse(rest); err != nil {
+			return err
+		}
+		return wait(c, *ch, *topic, *timeout)
 	case "ack":
 		var id int
 		if len(rest) != 1 {
@@ -154,9 +167,6 @@ func run(args []string) error {
 		if err := f.Parse(rest); err != nil {
 			return err
 		}
-		if c.Registry == "" {
-			return errors.New("no [zm] registry channel in " + *rc)
-		}
 		role := *as
 		if role == "" {
 			role = strings.TrimSuffix(filepath.Base(*rc), ".zuliprc")
@@ -166,14 +176,12 @@ func run(args []string) error {
 				return fmt.Errorf("role, session and host must match %s, got %q", safe, v)
 			}
 		}
-		_, err := sendOnce(c, c.Registry, "registry", fmt.Sprintf("zm-%s role=%s host=%s session=%s", cmd, role, *h, *session))
-		return err
+		return toPorter(c, *rc, fmt.Sprintf("zm-%s role=%s host=%s session=%s", cmd, role, *h, *session))
 	case "join":
-		if len(rest) == 0 || c.Registry == "" {
-			return errors.New("join needs a channel and a [zm] registry channel")
+		if len(rest) == 0 {
+			return errors.New("join needs a channel")
 		}
-		_, err := sendOnce(c, c.Registry, "registry", "zm-join "+strings.Join(rest, " "))
-		return err
+		return toPorter(c, *rc, "zm-join "+strings.Join(rest, " "))
 	case "whoami":
 		id, name, err := c.Me()
 		if err != nil {
@@ -185,15 +193,56 @@ func run(args []string) error {
 		if err := f.Parse(rest); err != nil {
 			return err
 		}
-		if c.Registry == "" {
-			return errors.New("no [zm] registry channel in " + *rc)
-		}
 		return runDaemon(c, *h)
 	default:
 		g.Usage()
 		return fmt.Errorf("unknown command %q", cmd)
 	}
 	return nil
+}
+
+// wait is for short-lived helpers that have no registered session to wake: it blocks on an
+// event queue narrowed to one topic until another account posts there.
+func wait(c *Client, channel, topic string, timeout time.Duration) error {
+	if channel == "" || topic == "" {
+		return errors.New("wait needs -c and -t")
+	}
+	me, _, err := c.Me()
+	if err != nil {
+		return err
+	}
+	q, last, err := c.RegisterQueue([2]string{"channel", channel}, [2]string{"topic", topic})
+	if err != nil {
+		return err
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		evs, err := c.Events(q, last)
+		if err != nil {
+			return err // the queue outlives a long-poll by minutes; any error here is real
+		}
+		for _, ev := range evs {
+			last = max(last, ev.ID)
+			if ev.Type == "message" && ev.Message.SenderID != me {
+				msgs, _, err := c.Messages([]narrowTerm{{"id", ev.Message.ID}}, strconv.Itoa(ev.Message.ID), 0, 0, false)
+				if err != nil || len(msgs) == 0 {
+					return fmt.Errorf("fetch %d: %v", ev.Message.ID, err)
+				}
+				printMsg(msgs[0])
+				return nil
+			}
+		}
+	}
+	os.Exit(3)
+	return nil
+}
+
+// toPorter sends a request to the daemon; register/join are idempotent, so no retry bookkeeping.
+func toPorter(c *Client, rc, text string) error {
+	if c.Porter == "" {
+		return errors.New("no [zm] porter in " + rc)
+	}
+	return c.SendDM(c.Porter, text)
 }
 
 func printMsg(m Message) {

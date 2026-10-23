@@ -15,7 +15,7 @@ import (
 )
 
 // The daemon keeps no files. Everything it knows is rebuilt from Zulip on every (re)start:
-//   - which session to wake for whom: the registry topic's zm-register/zm-unregister history;
+//   - which session to wake for whom: zm-register/zm-unregister DMs agents sent to this bot;
 //   - which channels to watch: its own subscriptions;
 //   - what is still unhandled: recent @-mentions the mentioned bot hasn't reacted to or answered after.
 
@@ -34,10 +34,7 @@ func runDaemon(c *Client, host string) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("zm daemon: %s on host %s, registry #%s", name, host, c.Registry)
-	if err := c.Subscribe(c.Registry); err != nil {
-		return err
-	}
+	log.Printf("zm daemon: %s on host %s", name, host)
 	d := &daemon{c: c, me: me, host: host, nudged: map[int]bool{}}
 	for {
 		err := d.cycle()
@@ -84,8 +81,10 @@ func (d *daemon) cycle() error {
 func (d *daemon) handle(msgs []Message) {
 	wake := map[string]map[string]int{} // session -> role -> new mentions
 	for _, m := range msgs {
-		if m.ChannelName() == d.c.Registry && m.Topic == "registry" {
-			d.applyRegistry(m, true)
+		if m.ChannelName() == "" { // a DM: requests to this bot
+			if m.SenderID != d.me {
+				d.applyRegistry(m, true)
+			}
 			continue
 		}
 		for _, uid := range mentionedIDs(m.Content) {
@@ -113,7 +112,7 @@ func (d *daemon) loadRegistry() error {
 	var all []Message
 	anchor := "newest"
 	for {
-		msgs, oldest, err := d.c.Messages([]narrowTerm{{"channel", d.c.Registry}, {"topic", "registry"}}, anchor, 1000, 0, false)
+		msgs, oldest, err := d.c.Messages([]narrowTerm{{"is", "dm"}}, anchor, 1000, 0, false)
 		if err != nil {
 			return err
 		}
@@ -126,13 +125,15 @@ func (d *daemon) loadRegistry() error {
 	}
 	d.subs = map[string]map[int]string{}
 	for _, m := range all {
-		d.applyRegistry(m, false)
+		if m.SenderID != d.me {
+			d.applyRegistry(m, false)
+		}
 	}
 	log.Printf("registry: %d session(s) on %s", len(d.subs), d.host)
 	return nil
 }
 
-// applyRegistry handles one registry line. live=false replays history: only joins this daemon
+// applyRegistry handles one request DM. live=false replays history: only joins this daemon
 // hasn't confirmed with ✅ yet are redone (they were requested while it was down).
 func (d *daemon) applyRegistry(m Message, live bool) {
 	cmd, kv, rest := parseCommand(m.Content)
@@ -144,6 +145,9 @@ func (d *daemon) applyRegistry(m Message, live bool) {
 		s := kv["session"]
 		if cmd == "zm-unregister" {
 			delete(d.subs[s], m.SenderID)
+			if len(d.subs[s]) == 0 {
+				delete(d.subs, s)
+			}
 			return
 		}
 		// Several roles may share a session (e.g. a helper started inside it); nobody replaces anybody.
@@ -159,15 +163,16 @@ func (d *daemon) applyRegistry(m Message, live bool) {
 			return
 		}
 		// ponytail: every host's daemon performs the join; subscribing is idempotent, so it's harmless.
-		err := d.c.Subscribe(rest, m.SenderID)
-		if err == nil {
-			err = d.c.Subscribe(rest)
+		who := []string{m.SenderEmail, d.c.Email}
+		if d.c.Owner != "" {
+			who = append(who, d.c.Owner)
 		}
-		if err != nil {
-			log.Printf("join %q for user %d: %v", rest, m.SenderID, err)
-			_, _ = d.c.Send(d.c.Registry, "registry", fmt.Sprintf("@_**%s** join #**%s** failed: %v", m.SenderName, rest, err))
+		if err := d.c.Subscribe(rest, who...); err != nil {
+			log.Printf("join %q for %s: %v", rest, m.SenderEmail, err)
+			_ = d.c.SendDM(m.SenderEmail, fmt.Sprintf("join %s failed: %v", rest, err))
 			return
 		}
+		log.Printf("joined %s to #%s", m.SenderEmail, rest)
 		_ = d.c.React(m.ID, "check")
 	}
 }
@@ -289,7 +294,7 @@ func mentionedIDs(renderedHTML string) []int {
 
 var tagRe = regexp.MustCompile(`<[^>]*>`)
 
-// parseCommand reads the first line of a registry message, raw or rendered:
+// parseCommand reads the first line of a request DM, raw or rendered:
 // "zm-register role=a host=b session=c" -> ("zm-register", {role:a,...}, "role=a host=b session=c").
 func parseCommand(content string) (cmd string, kv map[string]string, rest string) {
 	text := strings.TrimSpace(html.UnescapeString(tagRe.ReplaceAllString(content, " ")))

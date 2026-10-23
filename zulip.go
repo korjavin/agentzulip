@@ -16,7 +16,8 @@ import (
 // Client is a minimal Zulip REST client for one account (a bot).
 type Client struct {
 	Site, Email, Key string
-	Registry         string // channel holding the "registry" topic, from the [zm] section
+	Porter           string // [zm] porter: the daemon bot's email; agents DM it register/join requests
+	Owner            string // [zm] owner (daemon only): human email added to every channel it creates
 	http             *http.Client
 }
 
@@ -48,7 +49,7 @@ type APIError struct {
 
 func (e *APIError) Error() string { return fmt.Sprintf("zulip %d %s: %s", e.Status, e.Code, e.Msg) }
 
-// loadRC reads a standard zuliprc ([api] email/key/site) plus an optional [zm] registry=.
+// loadRC reads a standard zuliprc ([api] email/key/site) plus an optional [zm] section.
 func loadRC(path string) (*Client, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -85,8 +86,10 @@ func loadRC(path string) (*Client, error) {
 			c.Key = strings.TrimSpace(string(out))
 		case "api.site":
 			c.Site = strings.TrimRight(v, "/")
-		case "zm.registry":
-			c.Registry = v
+		case "zm.porter":
+			c.Porter = v
+		case "zm.owner":
+			c.Owner = v
 		}
 	}
 	if c.Email == "" || c.Key == "" || c.Site == "" {
@@ -186,13 +189,20 @@ func (c *Client) React(id int, emoji string) error {
 	return err
 }
 
-// Subscribe adds the given users (empty = me) to a channel.
-func (c *Client) Subscribe(channel string, userIDs ...int) error {
-	p := url.Values{"subscriptions": {jsonParam([]map[string]string{{"name": channel}})}}
-	if len(userIDs) > 0 {
-		p.Set("principals", jsonParam(userIDs))
-	}
-	return c.call("POST", "/users/me/subscriptions", p, nil)
+// SendDM sends a direct message to one user by email.
+func (c *Client) SendDM(to, content string) error {
+	return c.call("POST", "/messages", url.Values{
+		"type": {"direct"}, "to": {jsonParam([]string{to})}, "content": {content},
+	}, nil)
+}
+
+// Subscribe adds users (by email) to a channel, creating it as private if it doesn't exist.
+func (c *Client) Subscribe(channel string, emails ...string) error {
+	return c.call("POST", "/users/me/subscriptions", url.Values{
+		"subscriptions": {jsonParam([]map[string]string{{"name": channel}})},
+		"principals":    {jsonParam(emails)},
+		"invite_only":   {"true"},
+	}, nil)
 }
 
 func (c *Client) Subscriptions() ([]string, error) {
@@ -226,15 +236,17 @@ type Event struct {
 	Message Message `json:"message"`
 }
 
-func (c *Client) RegisterQueue() (queueID string, lastEventID int, err error) {
+// RegisterQueue opens an event queue for messages, optionally narrowed (e.g. to one topic).
+func (c *Client) RegisterQueue(narrow ...[2]string) (queueID string, lastEventID int, err error) {
 	var res struct {
 		QueueID     string `json:"queue_id"`
 		LastEventID int    `json:"last_event_id"`
 	}
-	err = c.call("POST", "/register", url.Values{
-		"event_types":    {`["message"]`},
-		"apply_markdown": {"true"},
-	}, &res)
+	p := url.Values{"event_types": {`["message"]`}, "apply_markdown": {"true"}}
+	if len(narrow) > 0 {
+		p.Set("narrow", jsonParam(narrow))
+	}
+	err = c.call("POST", "/register", p, &res)
 	return res.QueueID, res.LastEventID, err
 }
 
