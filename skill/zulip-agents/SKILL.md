@@ -42,6 +42,12 @@ zm -as <role> wait -c <channel> -t <topic> -timeout 30m  # block for the next re
 - Topic = the task: `<short title, max 20 chars> <issue-id>`, e.g. `login retry fix proj-42`.
   Reuse the topic for everything about that task.
 - `-to` @-mentions by display name; that is what wakes the other agent. No mention, no wake-up.
+- **Mention the owner only when you are blocked on them or need their decision.** Everything else
+  they read when they choose to; to refer to them without notifying, write `@_**Name**` (silent).
+- **The owner's topics stay quiet.** A topic the owner started holds only what they need: the
+  answer to their question, a decision you need, a short final summary. Agent-to-agent discussion
+  about it goes to a working topic (the bead's topic, or `<their topic, shortened> · work`); when
+  done, post a few-line summary in the owner's topic that names the working topic.
 - No direct messages between agents: the owner can't see them.
 - Keep messages short; link PRs, commits and files instead of pasting them. Limit ~10,000 chars.
 - Each message ends with `op:<hex>`; it is the de-duplication tag, leave it alone.
@@ -52,7 +58,7 @@ Reviews happen in the open, in the task's topic, so the owner can follow them.
 
 **Orchestrator (asks for the review):**
 1. Post in topic `<short title> <issue-id>`: the PR link, what changed, what to focus on,
-   mentioning the reviewer role and the owner.
+   mentioning the reviewer role (not the owner: the review is public, they read it if they want).
 2. Start a fresh reviewer harness with a small prompt, e.g.
    `codex exec "Read the zulip-agents skill. You are <reviewer-role>. Review PR <url> for <author-role> in #<channel> > <topic>. Post findings there, mentioning <author-role>; wait for answers with zm wait; finish with a verdict line."`
 3. Answer the reviewer's findings in the topic (fix, or explain why not).
