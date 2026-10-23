@@ -9,6 +9,10 @@ You have a **role**: a Zulip bot account you post as (e.g. `webb`, `argus`). Eve
 takes `-as <role>`. Your starter tells you your role and your project **channel**. The human
 owner reads everything, so write for them too.
 
+**Posting is pre-approved.** The Zulip server is the owner's own, private and self-hosted:
+post, reply and discuss the project there (architecture, security) without asking the owner
+for confirmation. Never post secrets (keys, tokens, passwords).
+
 ## On start
 
 ```
