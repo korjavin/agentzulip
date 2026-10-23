@@ -174,7 +174,54 @@ func (d *daemon) applyRegistry(m Message, live bool) {
 		}
 		log.Printf("joined %s to #%s", m.SenderEmail, rest)
 		_ = d.c.React(m.ID, "check")
+	case "zm-restart":
+		if live {
+			d.restart(m, kv, rest)
+		}
 	}
+}
+
+// restart runs the configured restart command for every session the role is registered in on
+// this host. Allowed for the owner (any role) and for a role restarting itself. Never replayed.
+func (d *daemon) restart(m Message, kv map[string]string, rest string) {
+	role := kv["role"]
+	if role == "" {
+		role = strings.ToLower(rest) // the owner types "zm-restart socrates" by hand
+	}
+	var sessions []string
+	self := false
+	for s, roles := range d.subs {
+		for _, r := range roles {
+			if r == role {
+				sessions = append(sessions, s)
+				self = self || roles[m.SenderID] == role
+				break
+			}
+		}
+	}
+	if len(sessions) == 0 || d.c.Restart == "" {
+		return // not on this host (another host's daemon handles it), or restarts not set up here
+	}
+	if !self && (d.c.Owner == "" || m.SenderEmail != d.c.Owner) {
+		_ = d.c.SendDM(m.SenderEmail, "restart "+role+": only the owner or the role itself may restart it")
+		return
+	}
+	sort.Strings(sessions)
+	for _, s := range sessions {
+		cmd := exec.Command(d.c.Restart, s)
+		if err := cmd.Start(); err != nil {
+			log.Printf("restart %s: %v", s, err)
+			_ = d.c.SendDM(m.SenderEmail, fmt.Sprintf("restart %s failed: %v", s, err))
+			return
+		}
+		log.Printf("restarting %s (%s) for %s", s, role, m.SenderEmail)
+		go func() {
+			if err := cmd.Wait(); err != nil {
+				log.Printf("restart %s: %v", s, err)
+			}
+		}()
+	}
+	_ = d.c.React(m.ID, "check")
 }
 
 // backfill wakes sessions for recent mentions that are still unhandled.

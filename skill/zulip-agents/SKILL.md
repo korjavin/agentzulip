@@ -23,6 +23,11 @@ zm -as <role> register                  # wake my terminal session on @-mentions
 zm -as <role> inbox                     # catch up on what I missed
 ```
 
+**Fresh context:** `zm -as <role> restart` makes the watcher kill your session and start it again
+with your first prompt (only if the owner set restarts up on this host). Use it only when your
+role card says so, as your very last action: everything not posted to Zulip is lost. The owner
+can restart any role by DMing the watcher bot `zm-restart <role>`.
+
 Skip `register` if you are a short-lived helper started for one job (e.g. one review): you use
 `zm wait` instead (below) and exit when done. `join`/`register` are direct messages to the
 watcher bot; it reacts ✅ when a join is done. Never run `zmx set`.

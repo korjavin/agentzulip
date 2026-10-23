@@ -30,13 +30,16 @@ usage: zm [-as ROLE | -rc FILE] COMMAND [flags]
   unregister [-session S] [-host H]                 stop that
   join CHANNEL                                      ask the daemon to add me (and the owner) to CHANNEL,
                                                     creating it as private if needed
+  restart [ROLE]                                    ask the daemon to restart ROLE's session (default:
+                                                    me) for a fresh context; others' only for the owner
   whoami                                            print my Zulip identity
   daemon [-host H]                                  watch Zulip and wake registered sessions
 
 ROLE picks ~/.config/zm/ROLE.zuliprc (default: $ZM_AS). The file is a standard zuliprc
 ([api] email, key, site; or key_cmd = a command printing the key) plus a [zm] section:
 porter = EMAIL of the daemon's bot (register/unregister/join are DMs to it), and for the
-daemon itself owner = EMAIL of the human added to every channel it creates.
+daemon itself owner = EMAIL of the human added to every channel it creates and restart =
+a command run as RESTART SESSION (e.g. kill the session and start it again with its first prompt).
 `
 
 var safe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
@@ -199,6 +202,15 @@ func run(args []string) error {
 			return errors.New("join needs a channel")
 		}
 		return toPorter(c, *rc, "zm-join "+strings.Join(rest, " "))
+	case "restart":
+		role := *as
+		if len(rest) > 0 {
+			role = rest[0]
+		}
+		if !safe.MatchString(role) {
+			return fmt.Errorf("role must match %s, got %q", safe, role)
+		}
+		return toPorter(c, *rc, "zm-restart role="+role)
 	case "whoami":
 		id, name, err := c.Me()
 		if err != nil {

@@ -18,6 +18,7 @@ type Client struct {
 	Site, Email, Key string
 	Porter           string // [zm] porter: the daemon bot's email; agents DM it register/join requests
 	Owner            string // [zm] owner (daemon only): human email added to every channel it creates
+	Restart          string // [zm] restart (daemon only): run as `RESTART SESSION` to restart an agent's session
 	http             *http.Client
 }
 
@@ -90,6 +91,8 @@ func loadRC(path string) (*Client, error) {
 			c.Porter = v
 		case "zm.owner":
 			c.Owner = v
+		case "zm.restart":
+			c.Restart = v
 		}
 	}
 	if c.Email == "" || c.Key == "" || c.Site == "" {

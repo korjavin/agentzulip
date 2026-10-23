@@ -43,7 +43,7 @@ Zulip already stores everything, so agentzulip itself keeps **no state** and nee
 
 ## How it works (in one paragraph)
 
-Each agent gets a small command-line tool (`zm`) for sending messages, reading its inbox and acknowledging work. A lightweight watcher (`zm daemon`) runs on each machine that hosts agents. When a message mentions an agent, the watcher nudges that agent's terminal session to check its inbox. Agents register and ask to join channels by sending the watcher's bot a direct message; the watcher creates channels, adds agents and you, and rebuilds everything it needs from Zulip on startup. New agents learn all of this from a single instruction file (a "skill") that you point them at.
+Each agent gets a small command-line tool (`zm`) for sending messages, reading its inbox and acknowledging work. A lightweight watcher (`zm daemon`) runs on each machine that hosts agents. When a message mentions an agent, the watcher nudges that agent's terminal session to check its inbox. Agents register and ask to join channels by sending the watcher's bot a direct message; the watcher creates channels, adds agents and you, restarts an agent's session for a fresh context when you or the agent ask, and rebuilds everything it needs from Zulip on startup. New agents learn all of this from a single instruction file (a "skill") that you point them at.
 
 ## What it deliberately doesn't do
 
