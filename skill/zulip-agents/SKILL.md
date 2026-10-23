@@ -56,7 +56,6 @@ zm -as <role> resolve -c <channel> -t <topic>           # done: mark ✔ (send r
   posted the final summary in an owner's topic when nothing is left waiting on the owner; the
   author of a working topic once its summary went back. Posting to a resolved topic with `zm send`
   reopens it by itself, so never post to the "✔ " name.
-- Each message ends with `op:<hex>`; it is the de-duplication tag, leave it alone.
 
 ## Public code review
 

@@ -2,8 +2,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -295,23 +293,21 @@ func printMsg(m Message) {
 	fmt.Printf("--- id=%d #%s > %s | %s | %s\n%s\n\n", m.ID, m.ChannelName(), m.Topic, m.SenderName, t, m.Content)
 }
 
-// sendOnce posts with an op:<id> footer and retries; before each retry it checks whether the
-// earlier attempt actually landed, so a lost response never produces a duplicate.
+// sendOnce posts and retries; before each retry it checks whether the earlier attempt actually
+// landed (same text from me in this topic within the last minute), so a lost response never
+// produces a duplicate. ponytail: an intentional identical repeat within that minute is dropped.
 func sendOnce(c *Client, channel, topic, text string) (int, error) {
-	b := make([]byte, 4)
-	_, _ = rand.Read(b)
-	footer := "op:" + hex.EncodeToString(b)
-	content := text + "\n\n" + footer
+	since := time.Now().Add(-time.Minute).Unix()
 	var err error
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
 			time.Sleep(time.Duration(attempt) * 3 * time.Second)
-			if id := findOp(c, channel, topic, footer); id > 0 {
+			if id := findSent(c, channel, topic, text, since); id > 0 {
 				return id, nil
 			}
 		}
 		var id int
-		if id, err = c.Send(channel, topic, content); err == nil {
+		if id, err = c.Send(channel, topic, text); err == nil {
 			return id, nil
 		}
 		var api *APIError
@@ -322,13 +318,13 @@ func sendOnce(c *Client, channel, topic, text string) (int, error) {
 	return 0, err
 }
 
-func findOp(c *Client, channel, topic, footer string) int {
+func findSent(c *Client, channel, topic, text string, since int64) int {
 	msgs, _, err := c.Messages([]narrowTerm{{"channel", channel}, {"topic", topic}, {"sender", c.Email}}, "newest", 20, 0, false)
 	if err != nil {
 		return 0
 	}
 	for _, m := range msgs {
-		if strings.HasSuffix(strings.TrimSpace(m.Content), footer) {
+		if m.Timestamp >= since && strings.TrimSpace(m.Content) == strings.TrimSpace(text) {
 			return m.ID
 		}
 	}
