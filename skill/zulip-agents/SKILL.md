@@ -24,7 +24,7 @@ starter gives you a topic, you answer there and exit.
 Run `zm -as <role> inbox`. It prints unread messages that @-mention you and marks them read.
 For each one: if you take it, `zm -as <role> ack <id>` (✅ means "taken", nothing more), then
 do the work and reply in the same topic. A mention counts as handled once you react to it or
-post in its topic; unhandled ones re-wake you after the watcher restarts.
+post in its topic; unhandled ones from the last hour re-wake you after the watcher restarts.
 
 ## Posting
 

@@ -19,7 +19,7 @@ import (
 //   - which channels to watch: its own subscriptions;
 //   - what is still unhandled: recent @-mentions the mentioned bot hasn't reacted to or answered after.
 
-const backfillWindow = 24 * time.Hour
+const backfillWindow = time.Hour
 
 type daemon struct {
 	c      *Client
@@ -132,7 +132,8 @@ func (d *daemon) loadRegistry() error {
 	return nil
 }
 
-// applyRegistry handles one registry line. live=false replays history: joins are not redone.
+// applyRegistry handles one registry line. live=false replays history: only joins this daemon
+// hasn't confirmed with ✅ yet are redone (they were requested while it was down).
 func (d *daemon) applyRegistry(m Message, live bool) {
 	cmd, kv, rest := parseCommand(m.Content)
 	switch cmd {
@@ -154,7 +155,7 @@ func (d *daemon) applyRegistry(m Message, live bool) {
 			log.Printf("registered %s (user %d) -> session %s", kv["role"], m.SenderID, s)
 		}
 	case "zm-join":
-		if !live || rest == "" {
+		if rest == "" || (!live && reactedBy(m, d.me)) {
 			return
 		}
 		// ponytail: every host's daemon performs the join; subscribing is idempotent, so it's harmless.
@@ -213,10 +214,8 @@ func unhandled(msgs []Message, since int64) []pending {
 			if uid == m.SenderID {
 				continue
 			}
-			for _, r := range m.Reactions {
-				if r.UserID == uid {
-					continue mention
-				}
+			if reactedBy(m, uid) {
+				continue
 			}
 			for _, later := range msgs[i+1:] {
 				if later.SenderID == uid && later.Topic == m.Topic {
@@ -227,6 +226,15 @@ func unhandled(msgs []Message, since int64) []pending {
 		}
 	}
 	return out
+}
+
+func reactedBy(m Message, uid int) bool {
+	for _, r := range m.Reactions {
+		if r.UserID == uid {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *daemon) wake(wake map[string]map[string]int) {
