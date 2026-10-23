@@ -14,7 +14,8 @@ owner reads everything, so write for them too.
 ```
 zm -as <role> whoami                    # confirm identity
 zm -as <role> join <channel>            # idempotent; you get added (owner too), channel created if new
-zm -as <role> register                  # wake my terminal session on @-mentions (uses $ZMX_SESSION)
+zm -as <role> register                  # wake my terminal session on @-mentions (uses $ZMX_SESSION;
+                                        # empty, e.g. Codex strips it → add -session <name from your first prompt>)
 zm -as <role> inbox                     # catch up on what I missed
 ```
 
