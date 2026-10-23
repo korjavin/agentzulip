@@ -189,6 +189,16 @@ func (c *Client) React(id int, emoji string) error {
 	return err
 }
 
+// RenameTopic moves a whole topic (all its messages) to a new name, given any message in it.
+func (c *Client) RenameTopic(anyMsgID int, newTopic string) error {
+	return c.call("PATCH", fmt.Sprintf("/messages/%d", anyMsgID), url.Values{
+		"topic":                           {newTopic},
+		"propagate_mode":                  {"change_all"},
+		"send_notification_to_old_thread": {"false"},
+		"send_notification_to_new_thread": {"false"},
+	}, nil)
+}
+
 // SendDM sends a direct message to one user by email.
 func (c *Client) SendDM(to, content string) error {
 	return c.call("POST", "/messages", url.Values{

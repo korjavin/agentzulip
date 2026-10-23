@@ -25,6 +25,8 @@ usage: zm [-as ROLE | -rc FILE] COMMAND [flags]
   read -c CHANNEL -t TOPIC [-n 30]                  recent history of a topic
   wait -c CHANNEL -t TOPIC [-timeout 1h]            block until someone else posts there; print it
                                                     (exit 3 on timeout)
+  resolve -c CHANNEL -t TOPIC                       mark the topic done (Zulip's "✔ " prefix)
+  unresolve -c CHANNEL -t TOPIC                     reopen it (send does this by itself)
   ack ID                                            react ✅ ("taken") to a message
   register [-session S] [-host H]                   ask the daemon to wake session S on mentions of me
   unregister [-session S] [-host H]                 stop that
@@ -105,6 +107,9 @@ func run(args []string) error {
 		if len(mentions) > 0 {
 			text = strings.Join(mentions, " ") + " " + text
 		}
+		if err := reopen(c, *ch, *topic); err != nil {
+			return err
+		}
 		id, err := sendOnce(c, *ch, *topic, text)
 		if err != nil {
 			return err
@@ -138,6 +143,9 @@ func run(args []string) error {
 			return err
 		}
 		msgs, _, err := c.Messages([]narrowTerm{{"channel", *ch}, {"topic", *topic}}, "newest", *n, 0, false)
+		if err == nil && len(msgs) == 0 { // maybe resolved since
+			msgs, _, err = c.Messages([]narrowTerm{{"channel", *ch}, {"topic", resolvedPrefix + *topic}}, "newest", *n, 0, false)
+		}
 		if err != nil {
 			return err
 		}
@@ -152,6 +160,17 @@ func run(args []string) error {
 			return err
 		}
 		return wait(c, *ch, *topic, *timeout)
+	case "resolve", "unresolve":
+		ch := f.String("c", "", "channel")
+		topic := f.String("t", "", "topic")
+		if err := f.Parse(rest); err != nil {
+			return err
+		}
+		from, to := *topic, resolvedPrefix+*topic
+		if cmd == "unresolve" {
+			from, to = to, from
+		}
+		return renameTopic(c, *ch, from, to)
 	case "ack":
 		var id int
 		if len(rest) != 1 {
@@ -235,6 +254,32 @@ func wait(c *Client, channel, topic string, timeout time.Duration) error {
 	}
 	os.Exit(3)
 	return nil
+}
+
+const resolvedPrefix = "✔ " // Zulip's own marker for a resolved topic
+
+func renameTopic(c *Client, channel, from, to string) error {
+	msgs, _, err := c.Messages([]narrowTerm{{"channel", channel}, {"topic", from}}, "newest", 1, 0, false)
+	if err != nil {
+		return err
+	}
+	if len(msgs) == 0 {
+		return fmt.Errorf("no topic %q in #%s", from, channel)
+	}
+	return c.RenameTopic(msgs[0].ID, to)
+}
+
+// reopen un-resolves "✔ topic" before posting to "topic"; otherwise Zulip would start a second,
+// unresolved topic of the same name next to the resolved one.
+func reopen(c *Client, channel, topic string) error {
+	if strings.HasPrefix(topic, resolvedPrefix) {
+		return nil
+	}
+	err := renameTopic(c, channel, resolvedPrefix+topic, topic)
+	if err != nil && strings.HasPrefix(err.Error(), "no topic") {
+		return nil
+	}
+	return err
 }
 
 // toPorter sends a request to the daemon; register/join are idempotent, so no retry bookkeeping.

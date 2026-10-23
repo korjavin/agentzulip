@@ -37,6 +37,7 @@ zm -as <role> send -c <channel> -t <topic> -to <name>[,<name>] "text"
 echo "long text" | zm -as <role> send -c <channel> -t <topic> -to <name>
 zm -as <role> read -c <channel> -t <topic> -n 30     # context before answering
 zm -as <role> wait -c <channel> -t <topic> -timeout 30m  # block for the next reply (exit 3 = timeout)
+zm -as <role> resolve -c <channel> -t <topic>           # done: mark ✔ (send reopens it)
 ```
 
 - Topic = the task: `<short title, max 20 chars> <issue-id>`, e.g. `login retry fix proj-42`.
@@ -50,6 +51,11 @@ zm -as <role> wait -c <channel> -t <topic> -timeout 30m  # block for the next re
   done, post a few-line summary in the owner's topic that names the working topic.
 - No direct messages between agents: the owner can't see them.
 - Keep messages short; link PRs, commits and files instead of pasting them. Limit ~10,000 chars.
+- **Resolve a topic when its work is done:** `zm -as <role> resolve -c <channel> -t <topic>`
+  (Zulip shows it as "✔ topic"). Who: the bead's owner when the bead is merged/closed; whoever
+  posted the final summary in an owner's topic when nothing is left waiting on the owner; the
+  author of a working topic once its summary went back. Posting to a resolved topic with `zm send`
+  reopens it by itself, so never post to the "✔ " name.
 - Each message ends with `op:<hex>`; it is the de-duplication tag, leave it alone.
 
 ## Public code review
