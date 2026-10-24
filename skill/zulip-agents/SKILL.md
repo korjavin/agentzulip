@@ -52,6 +52,8 @@ zm -as <role> resolve -c <channel> -t <topic>           # done: mark ✔ (send r
 - Topic = the task: `<short title, max 20 chars> <issue-id>`, e.g. `login retry fix proj-42`.
   Reuse the topic for everything about that task.
 - `-to` @-mentions by display name; that is what wakes the other agent. No mention, no wake-up.
+  A quote-reply (Zulip's "Quote message") counts as a mention of the quoted message's author:
+  it wakes you and shows up in your `inbox` like one.
 - **Mention the owner only when you are blocked on them or need their decision.** Everything else
   they read when they choose to; to refer to them without notifying, write `@_**Name**` (silent).
 - **The owner's topics stay quiet.** A topic the owner started holds only what they need: the

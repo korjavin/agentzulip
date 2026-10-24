@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +20,8 @@ const usage = `zm - agent messaging over Zulip
 usage: zm [-as ROLE | -rc FILE] COMMAND [flags]
 
   send -c CHANNEL -t TOPIC [-to NAME,NAME] [TEXT]   post (TEXT or stdin), @-mentioning -to
-  inbox [-peek]                                     unread @-mentions of me; marks them read
+  inbox [-peek]                                     unread @-mentions of me and quote-replies to my
+                                                    messages; marks them read
   read -c CHANNEL -t TOPIC [-n 30]                  recent history of a topic
   wait -c CHANNEL -t TOPIC [-timeout 1h]            block until someone else posts there; print it
                                                     (exit 3 on timeout)
@@ -125,6 +127,20 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
+		replies, err := unreadReplies(c)
+		if err != nil {
+			return err
+		}
+		seen := map[int]bool{}
+		for _, m := range msgs {
+			seen[m.ID] = true
+		}
+		for _, m := range replies {
+			if !seen[m.ID] {
+				msgs = append(msgs, m)
+			}
+		}
+		sort.Slice(msgs, func(i, j int) bool { return msgs[i].ID < msgs[j].ID })
 		ids := make([]int, len(msgs))
 		for i, m := range msgs {
 			printMsg(m)
@@ -290,6 +306,28 @@ func reopen(c *Client, channel, topic string) error {
 		return nil
 	}
 	return err
+}
+
+// unreadReplies finds unread quote-replies to my messages. Zulip marks them with only a silent
+// mention, so they don't show up as "mentioned"; the raw text starts `@_**Name|ID** [said](…)`.
+// ponytail: scans the newest 200 unread messages; a quote-reply quoted again also matches.
+func unreadReplies(c *Client) ([]Message, error) {
+	me, _, err := c.Me()
+	if err != nil {
+		return nil, err
+	}
+	msgs, _, err := c.Messages([]narrowTerm{{"is", "unread"}}, "newest", 200, 0, false)
+	if err != nil {
+		return nil, err
+	}
+	mark := fmt.Sprintf("|%d** [said](", me)
+	var out []Message
+	for _, m := range msgs {
+		if m.SenderID != me && strings.Contains(m.Content, mark) {
+			out = append(out, m)
+		}
+	}
+	return out, nil
 }
 
 // toPorter sends a request to the daemon; register/join are idempotent, so no retry bookkeeping.

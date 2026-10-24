@@ -323,20 +323,56 @@ func nudge(session, text string) error {
 }
 
 // Rendered mentions look like <span class="user-mention" data-user-id="12">; silent mentions
-// carry class "user-mention silent" and deliberately don't match.
-var mentionRe = regexp.MustCompile(`<span class="user-mention" data-user-id="(\d+)"`)
+// carry class "user-mention silent" and deliberately don't match. A quote-reply ("Quote message"
+// in Zulip) starts with a silent mention of the author followed by a "said" link to the message:
+// that counts as mentioning the author.
+var (
+	mentionRe = regexp.MustCompile(`<span class="user-mention" data-user-id="(\d+)"`)
+	replyRe   = regexp.MustCompile(`<span class="user-mention silent" data-user-id="(\d+)">[^<]*</span> <a href="[^"]*/near/\d+">said</a>`)
+)
 
+// mentionedIDs returns who a rendered message mentions or quote-replies to, ignoring anything
+// inside quotes (a quoted mention isn't a new one).
 func mentionedIDs(renderedHTML string) []int {
+	text := stripQuotes(renderedHTML)
 	var ids []int
 	seen := map[int]bool{}
-	for _, m := range mentionRe.FindAllStringSubmatch(renderedHTML, -1) {
-		id, _ := strconv.Atoi(m[1])
-		if !seen[id] {
-			seen[id] = true
-			ids = append(ids, id)
+	for _, re := range []*regexp.Regexp{mentionRe, replyRe} {
+		for _, m := range re.FindAllStringSubmatch(text, -1) {
+			id, _ := strconv.Atoi(m[1])
+			if !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
 		}
 	}
 	return ids
+}
+
+// stripQuotes drops <blockquote> elements, nested ones included.
+func stripQuotes(s string) string {
+	var b strings.Builder
+	depth := 0
+	for s != "" {
+		open, end := strings.Index(s, "<blockquote>"), strings.Index(s, "</blockquote>")
+		switch {
+		case open >= 0 && (end < 0 || open < end):
+			if depth == 0 {
+				b.WriteString(s[:open])
+			}
+			depth++
+			s = s[open+len("<blockquote>"):]
+		case end >= 0 && depth > 0:
+			depth--
+			s = s[end+len("</blockquote>"):]
+		default:
+			if depth == 0 {
+				b.WriteString(s)
+			}
+			s = ""
+		}
+	}
+	return b.String()
 }
 
 var tagRe = regexp.MustCompile(`<[^>]*>`)

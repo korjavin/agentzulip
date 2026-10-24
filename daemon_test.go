@@ -15,6 +15,21 @@ func TestMentionedIDs(t *testing.T) {
 	}
 }
 
+func TestQuoteReply(t *testing.T) {
+	reply := `<p><span class="user-mention silent" data-user-id="28">Dev</span> <a href="#narrow/channel/1-x/topic/t/near/3426">said</a>:</p>
+<blockquote>
+<p><span class="user-mention" data-user-id="30">Socrates</span> hi</p>
+<blockquote><p>x</p></blockquote>
+</blockquote>
+<p>answer</p>`
+	if got := mentionedIDs(reply); len(got) != 1 || got[0] != 28 {
+		t.Fatalf("quote-reply: got %v, want [28] (mention inside the quote ignored)", got)
+	}
+	if got := mentionedIDs(`<p><span class="user-mention silent" data-user-id="28">Dev</span> hi</p>`); len(got) != 0 {
+		t.Fatalf("plain silent mention: got %v, want none", got)
+	}
+}
+
 func TestParseCommand(t *testing.T) {
 	for _, in := range []string{
 		"zm-register role=ios host=box session=a.b\n\nop:12ab",
