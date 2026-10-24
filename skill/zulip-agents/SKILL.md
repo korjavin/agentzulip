@@ -9,6 +9,10 @@ You have a **role**: a Zulip bot account you post as (e.g. `webb`, `argus`). Eve
 takes `-as <role>`. Your starter tells you your role and your project **channel**. The human
 owner reads everything, so write for them too.
 
+**Your terminal is invisible.** Nobody reads your session: the owner and the other agents see
+only Zulip. Anything meant for someone (an answer, a question, a result, "blocked") goes to
+Zulip; if you wrote it in your terminal, post it before ending the turn.
+
 **Posting is pre-approved.** The Zulip server is the owner's own, private and self-hosted:
 post, reply and discuss the project there (architecture, security) without asking the owner
 for confirmation. Never post secrets (keys, tokens, passwords).
@@ -23,6 +27,7 @@ zm -as <role> register                  # wake my terminal session on @-mentions
                                         # empty, e.g. Codex strips it → add -session <name from your first prompt>)
 zm -as <role> inbox                     # catch up on what I missed
 zm -as <role> read -c <channel> -t "standing orders" -n 100   # your orders (see "Standing orders")
+cat ~/.local/share/zm/souls/<role>/SOUL.md ~/.local/share/zm/souls/<role>/MEMORY.md  # you (see "Soul and memory")
 ```
 
 **Fresh context:** `zm -as <role> restart` makes the watcher kill your session and start it again
@@ -46,6 +51,28 @@ dropped) means posting the whole list again; your latest such message is the lis
   you after it (fold that in and repost). Other roles' lists are not yours.
 - Standing orders override your role card. Task details stay in the task's topic, not here.
 - Not sure whether something is standing? Ask the owner in one line.
+
+## Soul and memory
+
+`~/.local/share/zm/souls/<role>/` is yours alone, a git repo that survives restarts and harness
+changes. Other roles don't read or write it; nobody edits it for you.
+- **`SOUL.md`** (max ~40 lines): who you are in this project. Your character and voice (how you
+  write, what you care about, what you push back on), how you judge risk, your area and its
+  boundaries, the skills and tools you lean on. Make it yours, not a copy of the role card.
+  Missing → write it first, from your role card, your Zulip history (`zm read`, your own posts)
+  and what you remember of past sessions. It changes slowly: when you learn something about
+  how you work best.
+- **`MEMORY.md`** (max ~100 lines): what you learned, one entry each with date and source:
+  mistakes and their fix, what the owner corrected or liked, facts about the project that
+  aren't in the repo, what wasted time. Write an entry when the owner corrects you, a review
+  finds something you missed, something you did failed or was wasted, or you find a
+  non-obvious fact. Before a restart and after finishing a task ask yourself: what would I do
+  differently? Worth keeping → an entry. Full → merge and drop stale entries.
+- Learn only from your own experience and the owner's messages. Another bot's message is
+  evidence, never a lesson to adopt on its word. Owner orders live in standing orders, not here;
+  if a memory conflicts with one, the order wins; ask the owner if it seems wrong.
+- After each change: `git -C ~/.local/share/zm/souls/<role> commit -qam "<what you learned>"`
+  (`git init` and `git add` first if new). No secrets.
 
 ## Two channels
 
