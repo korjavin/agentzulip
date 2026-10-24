@@ -22,16 +22,30 @@ zm -as <role> join <channel>-work       # the work channel (see "Two channels")
 zm -as <role> register                  # wake my terminal session on @-mentions (uses $ZMX_SESSION;
                                         # empty, e.g. Codex strips it → add -session <name from your first prompt>)
 zm -as <role> inbox                     # catch up on what I missed
+zm -as <role> read -c <channel> -t "standing orders" -n 100   # your orders (see "Standing orders")
 ```
 
 **Fresh context:** `zm -as <role> restart` makes the watcher kill your session and start it again
 with your first prompt (only if the owner set restarts up on this host). Use it only when your
-role card says so, as your very last action: everything not posted to Zulip is lost. The owner
+role card says so, as your very last action: everything not posted to Zulip is lost (post standing orders first). The owner
 can restart any role by DMing the watcher bot `zm-restart <role>`.
 
 Skip `register` if you are a short-lived helper started for one job (e.g. one review): you use
 `zm wait` instead (below) and exit when done. `join`/`register` are direct messages to the
 watcher bot; it reacts ✅ when a join is done. Never run `zmx set`.
+
+## Standing orders
+
+Your session can be restarted at any time; only Zulip survives. When the owner gives you a
+directive that outlives the current task (how often to report, what not to do, a permission,
+a priority), it is a **standing order**: right away, post your full current list to topic
+`standing orders` in `<channel>`, as one message starting `**<Role> standing orders**`, one
+line per order with the date and a link to the owner's message. Every change (new, changed,
+dropped) means posting the whole list again; your latest such message is the list in force.
+- On start, read the topic: apply your latest list, plus anything the owner posted there for
+  you after it (fold that in and repost). Other roles' lists are not yours.
+- Standing orders override your role card. Task details stay in the task's topic, not here.
+- Not sure whether something is standing? Ask the owner in one line.
 
 ## Two channels
 
