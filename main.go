@@ -34,13 +34,16 @@ usage: zm [-as ROLE | -rc FILE] COMMAND [flags]
                                                     creating it as private if needed
   restart [ROLE]                                    ask the daemon to restart ROLE's session (default:
                                                     me) for a fresh context; others' only for the owner
+  get [-o FILE] /user_uploads/…                     download a file attached to a message
   whoami                                            print my Zulip identity
   daemon [-host H]                                  watch Zulip and wake registered sessions
 
 ROLE picks ~/.config/zm/ROLE.zuliprc (default: $ZM_AS). The file is a standard zuliprc
 ([api] email, key, site; or key_cmd = a command printing the key) plus a [zm] section:
 porter = EMAIL of the daemon's bot (register/unregister/join are DMs to it), and for the
-daemon itself owner = EMAIL of the human added to every channel it creates and restart =
+owner = EMAIL of the human (agents: their unmentioned replies count as meant for me, see inbox;
+daemon: added to every channel it creates, and its unmentioned replies wake the agent who posted
+last in that topic) and, for the daemon, restart =
 a command run as RESTART SESSION (e.g. kill the session and start it again with its first prompt).
 `
 
@@ -227,6 +230,22 @@ func run(args []string) error {
 			return fmt.Errorf("role must match %s, got %q", safe, role)
 		}
 		return toPorter(c, *rc, "zm-restart role="+role)
+	case "get":
+		out := f.String("o", "", "output file (default: the upload's name in the current directory)")
+		if err := f.Parse(rest); err != nil {
+			return err
+		}
+		if f.NArg() != 1 {
+			return errors.New("get needs one /user_uploads/… link")
+		}
+		dest := *out
+		if dest == "" {
+			dest = filepath.Base(f.Arg(0))
+		}
+		if err := c.Download(f.Arg(0), dest); err != nil {
+			return err
+		}
+		fmt.Println(dest)
 	case "whoami":
 		id, name, err := c.Me()
 		if err != nil {
@@ -308,8 +327,25 @@ func reopen(c *Client, channel, topic string) error {
 	return err
 }
 
-// unreadReplies finds unread quote-replies to my messages. Zulip marks them with only a silent
-// mention, so they don't show up as "mentioned"; the raw text starts `@_**Name|ID** [said](…)`.
+// lastOtherPoster returns who posted last in m's topic before m, other than m's sender: the one
+// an owner's message without a mention is meant for. The daemon wakes them; their inbox shows it.
+func lastOtherPoster(c *Client, m Message) (int, error) {
+	msgs, _, err := c.Messages([]narrowTerm{{"channel", m.ChannelName()}, {"topic", m.Topic}}, strconv.Itoa(m.ID), 50, 0, false)
+	if err != nil {
+		return 0, err
+	}
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].ID < m.ID && msgs[i].SenderID != m.SenderID {
+			return msgs[i].SenderID, nil
+		}
+	}
+	return 0, nil
+}
+
+// unreadReplies finds unread messages meant for me that Zulip doesn't flag as mentions:
+//   - quote-replies to my messages: only a silent mention, raw text starts `@_**Name|ID** [said](…)`;
+//   - the owner's messages without any mention in a topic where I posted last (see lastOtherPoster).
+//
 // ponytail: scans the newest 200 unread messages; a quote-reply quoted again also matches.
 func unreadReplies(c *Client) ([]Message, error) {
 	me, _, err := c.Me()
@@ -323,8 +359,14 @@ func unreadReplies(c *Client) ([]Message, error) {
 	mark := fmt.Sprintf("|%d** [said](", me)
 	var out []Message
 	for _, m := range msgs {
-		if m.SenderID != me && strings.Contains(m.Content, mark) {
+		switch {
+		case m.SenderID == me:
+		case strings.Contains(m.Content, mark):
 			out = append(out, m)
+		case c.Owner != "" && m.SenderEmail == c.Owner && !strings.Contains(m.Content, "@**") && !strings.Contains(m.Content, "[said](") && m.ChannelName() != "":
+			if uid, err := lastOtherPoster(c, m); err == nil && uid == me {
+				out = append(out, m)
+			}
 		}
 	}
 	return out, nil

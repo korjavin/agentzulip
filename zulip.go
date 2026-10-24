@@ -17,7 +17,7 @@ import (
 type Client struct {
 	Site, Email, Key string
 	Porter           string // [zm] porter: the daemon bot's email; agents DM it register/join requests
-	Owner            string // [zm] owner (daemon only): human email added to every channel it creates
+	Owner            string // [zm] owner: the human's email (daemon: added to every channel it creates; both: unmentioned replies)
 	Restart          string // [zm] restart (daemon only): run as `RESTART SESSION` to restart an agent's session
 	http             *http.Client
 }
@@ -232,6 +232,38 @@ func (c *Client) Subscriptions() ([]string, error) {
 		names[i] = s.Name
 	}
 	return names, nil
+}
+
+// Download saves an uploaded file ("/user_uploads/…" as it appears in a message, or a full URL)
+// to dest: the API trades it for a short-lived public URL, which is then fetched.
+func (c *Client) Download(upload, dest string) error {
+	_, rest, ok := strings.Cut(upload, "/user_uploads/")
+	if !ok {
+		return fmt.Errorf("not an upload link: %q", upload)
+	}
+	var res struct {
+		URL string `json:"url"`
+	}
+	if err := c.call("GET", "/user_uploads/"+rest, nil, &res); err != nil {
+		return err
+	}
+	resp, err := http.Get(c.Site + res.URL)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download: %s", resp.Status)
+	}
+	f, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 func (c *Client) Me() (id int, name string, err error) {

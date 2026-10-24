@@ -19,7 +19,9 @@ import (
 //   - which channels to watch: its own subscriptions;
 //   - what is still unhandled: recent @-mentions the mentioned bot hasn't reacted to or answered after.
 
-const backfillWindow = time.Hour
+// backfillWindow covers a daemon restart or short outage. Longer, and every restart re-wakes
+// agents for old mentions they read but never reacted to: each wake costs a full agent turn.
+const backfillWindow = 15 * time.Minute
 
 type daemon struct {
 	c      *Client
@@ -87,9 +89,18 @@ func (d *daemon) handle(msgs []Message) {
 			}
 			continue
 		}
-		for _, uid := range mentionedIDs(m.Content) {
+		ids := mentionedIDs(m.Content)
+		for _, uid := range ids {
 			if uid != m.SenderID && !d.nudged[m.ID] {
 				d.addWake(wake, uid)
+			}
+		}
+		if len(ids) == 0 && d.c.Owner != "" && m.SenderEmail == d.c.Owner && !d.nudged[m.ID] {
+			// The owner answering in a topic without a mention means the agent they talk to there.
+			if uid, err := lastOtherPoster(d.c, m); err != nil {
+				log.Printf("owner reply %d: %v", m.ID, err)
+			} else if uid > 0 {
+				d.addWake(wake, uid) // no-op if that poster has no registered session
 			}
 		}
 		d.nudged[m.ID] = true
