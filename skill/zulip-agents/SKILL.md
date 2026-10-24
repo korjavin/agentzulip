@@ -18,6 +18,7 @@ for confirmation. Never post secrets (keys, tokens, passwords).
 ```
 zm -as <role> whoami                    # confirm identity
 zm -as <role> join <channel>            # idempotent; you get added (owner too), channel created if new
+zm -as <role> join <channel>-work       # the work channel (see "Two channels")
 zm -as <role> register                  # wake my terminal session on @-mentions (uses $ZMX_SESSION;
                                         # empty, e.g. Codex strips it → add -session <name from your first prompt>)
 zm -as <role> inbox                     # catch up on what I missed
@@ -31,6 +32,17 @@ can restart any role by DMing the watcher bot `zm-restart <role>`.
 Skip `register` if you are a short-lived helper started for one job (e.g. one review): you use
 `zm wait` instead (below) and exit when done. `join`/`register` are direct messages to the
 watcher bot; it reacts ✅ when a join is done. Never run `zmx set`.
+
+## Two channels
+
+Your starter names the project channel. It comes with a work channel, the same name plus `-work`:
+- **`<channel>`, the owner's channel.** Only what the owner needs to see: questions and decisions
+  for them, short final summaries, topics they started, work done together with them (design),
+  team rules. Keep it small enough for the owner to find their own conversations.
+- **`<channel>-work`, everything else** and the default: task/bead topics, reviews, agent-to-agent
+  discussion, working topics, handoffs, `roll call`.
+- Need the owner in the middle of a task: post in `<channel>`, mention them, link the work topic
+  (`#**<channel>-work>topic**`). Continue the work in the work topic.
 
 ## When "[zm] N new mention(s) for <role>" appears
 
@@ -49,7 +61,8 @@ zm -as <role> wait -c <channel> -t <topic> -timeout 30m  # block for the next re
 zm -as <role> resolve -c <channel> -t <topic>           # done: mark ✔ (send reopens it)
 ```
 
-- Topic = the task: `<short title, max 20 chars> <issue-id>`, e.g. `login retry fix proj-42`.
+- Topic = the task, in `<channel>-work`: `<short title, max 20 chars> <issue-id>`, e.g.
+  `login retry fix proj-42`.
   Reuse the topic for everything about that task.
 - `-to` @-mentions by display name; that is what wakes the other agent. No mention, no wake-up.
   A quote-reply (Zulip's "Quote message") counts as a mention of the quoted message's author:
@@ -58,8 +71,9 @@ zm -as <role> resolve -c <channel> -t <topic>           # done: mark ✔ (send r
   they read when they choose to; to refer to them without notifying, write `@_**Name**` (silent).
 - **The owner's topics stay quiet.** A topic the owner started holds only what they need: the
   answer to their question, a decision you need, a short final summary. Agent-to-agent discussion
-  about it goes to a working topic (the bead's topic, or `<their topic, shortened> · work`); when
-  done, post a few-line summary in the owner's topic that names the working topic.
+  about it goes to a working topic in `<channel>-work` (the bead's topic, or
+  `<their topic, shortened> · work`); when done, post a few-line summary in the owner's topic that
+  links the working topic.
 - No direct messages between agents: the owner can't see them.
 - Keep messages short; link PRs, commits and files instead of pasting them. Limit ~10,000 chars.
 - **Resolve a topic when its work is done:** `zm -as <role> resolve -c <channel> -t <topic>`
@@ -70,7 +84,7 @@ zm -as <role> resolve -c <channel> -t <topic>           # done: mark ✔ (send r
 
 ## Public code review
 
-Reviews happen in the open, in the task's topic, so the owner can follow them.
+Reviews happen in the open, in the task's topic in `<channel>-work`, so the owner can follow them.
 
 **Orchestrator (asks for the review):**
 1. Post in topic `<short title> <issue-id>`: the PR link, what changed, what to focus on,
