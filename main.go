@@ -149,7 +149,17 @@ func run(args []string) error {
 			printMsg(m)
 			ids[i] = m.ID
 		}
-		if len(msgs) == 0 {
+		open, err := unanswered(c, seen)
+		if err != nil {
+			return err
+		}
+		if len(open) > 0 {
+			fmt.Println("=== read earlier but never answered (reply in the topic or ack):")
+			for _, m := range open {
+				printMsg(m)
+			}
+		}
+		if len(msgs) == 0 && len(open) == 0 {
 			fmt.Println("(no unread mentions)")
 		}
 		if !*peek {
@@ -369,6 +379,39 @@ func unreadReplies(c *Client) ([]Message, error) {
 			}
 		}
 	}
+	return out, nil
+}
+
+// unanswered returns mentions of me from the last day that are already read but that I neither
+// reacted to nor answered later in their topic: e.g. read by a session that was then restarted.
+func unanswered(c *Client, skip map[int]bool) ([]Message, error) {
+	me, _, err := c.Me()
+	if err != nil {
+		return nil, err
+	}
+	since := time.Now().Add(-24 * time.Hour).Unix()
+	mentions, _, err := c.Messages([]narrowTerm{{"is", "mentioned"}}, "newest", 100, 0, false)
+	if err != nil {
+		return nil, err
+	}
+	mine, _, err := c.Messages([]narrowTerm{{"sender", c.Email}}, "newest", 200, 0, false)
+	if err != nil {
+		return nil, err
+	}
+	topic := func(m Message) string { return m.ChannelName() + ">" + strings.TrimPrefix(m.Topic, "✔ ") }
+	lastPost := map[string]int{}
+	for _, m := range mine {
+		lastPost[topic(m)] = max(lastPost[topic(m)], m.ID)
+	}
+	var out []Message
+	for _, m := range mentions {
+		if m.Timestamp < since || skip[m.ID] || m.SenderID == me || m.ChannelName() == "" ||
+			reactedBy(m, me) || lastPost[topic(m)] > m.ID {
+			continue
+		}
+		out = append(out, m)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
 }
 

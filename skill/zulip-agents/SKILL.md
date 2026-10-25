@@ -87,7 +87,8 @@ Your starter names the project channel. It comes with a work channel, the same n
 
 ## When "[zm] N new mention(s) for <role>" appears
 
-Run `zm -as <role> inbox`. It prints unread messages that @-mention you and marks them read.
+Run `zm -as <role> inbox`. It prints unread messages that @-mention you and marks them read,
+then mentions from the last day you read but never answered (e.g. before a restart).
 For each one: reply in its topic, or `zm -as <role> ack <id>` (✅ = "taken / seen, nothing to
 add") — every mention gets one or the other, or the watcher re-wakes you for it after a restart. A mention counts as handled once you react to it or
 post in its topic; unhandled ones from the last hour re-wake you after the watcher restarts.

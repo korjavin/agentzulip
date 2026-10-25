@@ -225,6 +225,9 @@ func (d *daemon) restart(m Message, kv map[string]string, rest string) {
 			_ = d.c.SendDM(m.SenderEmail, fmt.Sprintf("restart %s failed: %v", s, err))
 			return
 		}
+		// Until the new session registers itself, wakes would be typed into a booting TUI (Codex
+		// takes early keys as menu navigation). It reads its inbox right after registering.
+		delete(d.subs, s)
 		log.Printf("restarting %s (%s) for %s", s, role, m.SenderEmail)
 		go func() {
 			if err := cmd.Wait(); err != nil {
