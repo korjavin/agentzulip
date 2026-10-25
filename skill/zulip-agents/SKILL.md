@@ -33,7 +33,9 @@ cat ~/.local/share/zm/souls/<role>/SOUL.md ~/.local/share/zm/souls/<role>/MEMORY
 **Fresh context:** `zm -as <role> restart` makes the watcher kill your session and start it again
 with your first prompt (only if the owner set restarts up on this host). Use it only when your
 role card says so, as your very last action: everything not posted to Zulip is lost (post standing orders first). The owner
-can restart any role by DMing the watcher bot `zm-restart <role>`.
+can restart any role by DMing the watcher bot `zm-restart <role>`. A `[zm] Restart due (…)` line
+means your idle session got too big or too old: update MEMORY.md (and standing orders) if
+anything is worth keeping, then restart; if you don't within a few minutes, you get restarted.
 
 Skip `register` if you are a short-lived helper started for one job (e.g. one review): you use
 `zm wait` instead (below) and exit when done. `join`/`register` are direct messages to the
