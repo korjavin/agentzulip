@@ -26,7 +26,7 @@ zm -as <role> join <channel>-work       # the work channel (see "Two channels")
 zm -as <role> register                  # wake my terminal session on @-mentions (uses $ZMX_SESSION;
                                         # empty, e.g. Codex strips it → add -session <name from your first prompt>)
 zm -as <role> inbox                     # catch up on what I missed
-zm -as <role> read -c <channel> -t "standing orders" -n 100   # your orders (see "Standing orders")
+zm -as <role> read -c <channel>-work -t "standing orders" -n 100   # your orders (see "Standing orders")
 cat ~/.local/share/zm/souls/<role>/SOUL.md ~/.local/share/zm/souls/<role>/MEMORY.md  # you (see "Soul and memory")
 ```
 
@@ -46,7 +46,7 @@ watcher bot; it reacts ✅ when a join is done. Never run `zmx set`.
 Your session can be restarted at any time; only Zulip survives. When the owner gives you a
 directive that outlives the current task (how often to report, what not to do, a permission,
 a priority), it is a **standing order**: right away, post your full current list to topic
-`standing orders` in `<channel>`, as one message starting `**<Role> standing orders**`, one
+`standing orders` in `<channel>-work`, as one message starting `**<Role> standing orders**`, one
 line per order with the date and a link to the owner's message. Every change (new, changed,
 dropped) means posting the whole list again; your latest such message is the list in force.
 - On start, read the topic: apply your latest list, plus anything the owner posted there for
@@ -83,7 +83,8 @@ Your starter names the project channel. It comes with a work channel, the same n
   for them, short final summaries, topics they started, work done together with them (design),
   team rules. Keep it small enough for the owner to find their own conversations.
 - **`<channel>-work`, everything else** and the default: task/bead topics, reviews, agent-to-agent
-  discussion, working topics, handoffs, `roll call`.
+  discussion, working topics, handoffs, `roll call`, `standing orders`. When you hand a channel
+  name to someone else (a reviewer prompt, a developer), write the `-work` one.
 - Need the owner in the middle of a task: post in `<channel>`, mention them, link the work topic
   (`#**<channel>-work>topic**`). Continue the work in the work topic.
 
@@ -98,11 +99,11 @@ post in its topic; unhandled ones from the last hour re-wake you after the watch
 ## Posting
 
 ```
-zm -as <role> send -c <channel> -t <topic> -to <name>[,<name>] "text"
-echo "long text" | zm -as <role> send -c <channel> -t <topic> -to <name>
-zm -as <role> read -c <channel> -t <topic> -n 30     # context before answering
-zm -as <role> wait -c <channel> -t <topic> -timeout 30m  # block for the next reply (exit 3 = timeout)
-zm -as <role> resolve -c <channel> -t <topic>           # done: mark ✔ (send reopens it)
+zm -as <role> send -c <channel>-work -t <topic> -to <name>[,<name>] "text"
+echo "long text" | zm -as <role> send -c <channel>-work -t <topic> -to <name>
+zm -as <role> read -c <channel>-work -t <topic> -n 30     # context before answering
+zm -as <role> wait -c <channel>-work -t <topic> -timeout 30m  # block for the next reply (exit 3 = timeout)
+zm -as <role> resolve -c <channel>-work -t <topic>           # done: mark ✔ (send reopens it)
 zm -as <role> get -o /tmp/shot.png /user_uploads/…      # download an attached file/screenshot
 ```
 
@@ -140,18 +141,18 @@ Reviews happen in the open, in the task's topic in `<channel>-work`, so the owne
 2. Start a fresh reviewer harness yourself: nobody else will, a request alone gets no answer.
    Write the prompt to a file and pass it on stdin (inline prompts get refused by some harness
    guards), e.g. `codex exec - < /tmp/review-<issue-id>.md` with
-   `Read the zulip-agents skill. You are <reviewer-role>. Review PR <url> for <author-role> in #<channel> > <topic>. Post "reviewing" there first, then findings mentioning <author-role>; wait for answers with zm wait; finish with a verdict line.`
+   `Read the zulip-agents skill. You are <reviewer-role>. Review PR <url> for <author-role> in #<channel>-work > <topic>. Post "reviewing" there first, then findings mentioning <author-role>; wait for answers with zm wait; finish with a verdict line.`
    Then `zm wait -timeout 5m` for its "reviewing" line; none → the launch failed, check it.
 3. Answer the reviewer's findings in the topic (fix, or explain why not).
 4. When the verdict is posted, stop the reviewer harness. One reviewer per review: no shared
    long-lived reviewer context.
 
 **Reviewer (short-lived):**
-1. `zm -as <reviewer> read -c <channel> -t <topic>` for the request; post `reviewing` there;
+1. `zm -as <reviewer> read -c <channel>-work -t <topic>` for the request; post `reviewing` there;
    review the whole PR (on every round, not only the new commits).
 2. Post findings in the topic, mentioning the author: numbered, each with file:line, the
    problem, and the failure it causes. No praise, no summaries of the diff.
-3. `zm -as <reviewer> wait -c <channel> -t <topic>` for answers; reply; repeat until resolved
+3. `zm -as <reviewer> wait -c <channel>-work -t <topic>` for answers; reply; repeat until resolved
    or the author disagrees with a reason you accept.
 4. Post the verdict as the last line: `VERDICT: approve` or `VERDICT: changes needed (1, 3)`.
    Then exit.
