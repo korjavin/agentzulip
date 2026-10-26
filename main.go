@@ -19,19 +19,27 @@ const usage = `zm - agent messaging over Zulip
 
 usage: zm [-as ROLE | -rc FILE] COMMAND [flags]
 
-  send -c CHANNEL -t TOPIC [-to NAME,NAME] [TEXT]   post (TEXT or stdin), @-mentioning -to
+CHANNEL below defaults to the project's work channel; -owner picks the owner's channel instead.
+
+  send [-c CHANNEL|-owner] -t TOPIC [-to NAME,NAME] [TEXT]
+                                                    post (TEXT or stdin), @-mentioning -to
   inbox [-peek]                                     unread @-mentions of me and quote-replies to my
                                                     messages; marks them read
-  read -c CHANNEL -t TOPIC [-n 30]                  recent history of a topic
-  wait -c CHANNEL -t TOPIC [-timeout 1h]            block until someone else posts there; print it
+  read [-c CHANNEL|-owner] -t TOPIC [-n 30]         recent history of a topic
+  wait [-c CHANNEL|-owner] -t TOPIC [-timeout 1h]   block until someone else posts there; print it
                                                     (exit 3 on timeout)
-  resolve -c CHANNEL -t TOPIC                       mark the topic done (Zulip's "✔ " prefix)
-  unresolve -c CHANNEL -t TOPIC                     reopen it (send does this by itself)
+  resolve [-c CHANNEL|-owner] -t TOPIC              mark the topic done (Zulip's "✔ " prefix)
+  unresolve [-c CHANNEL|-owner] -t TOPIC            reopen it (send does this by itself)
+  rollcall TEXT                                     post TEXT in the work channel's "roll call"
+  orders [add TEXT]                                 read the work channel's "standing orders"; add
+                                                    posts TEXT there
+  where                                             print the project's owner and work channels
   ack ID                                            react ✅ ("taken") to a message
   register [-session S] [-host H]                   ask the daemon to wake session S on mentions of me
   unregister [-session S] [-host H]                 stop that
-  join CHANNEL                                      ask the daemon to add me (and the owner) to CHANNEL,
-                                                    creating it as private if needed
+  join [CHANNEL]                                    ask the daemon to add me (and the owner) to CHANNEL
+                                                    (default: both project channels); only the owner's
+                                                    requests create a missing channel
   restart [ROLE]                                    ask the daemon to restart ROLE's session (default:
                                                     me) for a fresh context; others' only for the owner
   get [-o FILE] /user_uploads/…                     download a file attached to a message
@@ -45,6 +53,8 @@ owner = EMAIL of the human (agents: their unmentioned replies count as meant for
 daemon: added to every channel it creates, and its unmentioned replies wake the agent who posted
 last in that topic) and, for the daemon, restart =
 a command run as RESTART SESSION (e.g. kill the session and start it again with its first prompt).
+channel = the project's owner channel (overridden by $ZM_CHANNEL); its work channel is the same
+name plus "-work".
 `
 
 var safe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
@@ -83,13 +93,30 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	if ch := os.Getenv("ZM_CHANNEL"); ch != "" {
+		c.Channel = ch
+	}
+	// to resolves a command's channel: -c if given, else the project's owner (-owner) or work channel.
+	var owner *bool
+	to := func(ch string) (string, error) {
+		switch {
+		case ch != "":
+			return ch, nil
+		case c.Channel == "":
+			return "", errors.New("no -c and no project channel: set $ZM_CHANNEL or [zm] channel in " + *rc)
+		case owner != nil && *owner:
+			return c.Channel, nil
+		}
+		return c.Channel + "-work", nil
+	}
 	f := flag.NewFlagSet(cmd, flag.ContinueOnError)
 	host, _ := os.Hostname()
 	switch cmd {
 	case "send":
 		ch := f.String("c", "", "channel")
+		owner = f.Bool("owner", false, "the owner's channel")
 		topic := f.String("t", "", "topic")
-		to := f.String("to", "", "comma-separated names to @-mention")
+		names := f.String("to", "", "comma-separated names to @-mention")
 		if err := f.Parse(rest); err != nil {
 			return err
 		}
@@ -101,11 +128,14 @@ func run(args []string) error {
 			}
 			text = string(b)
 		}
-		if *ch == "" || *topic == "" || strings.TrimSpace(text) == "" {
-			return errors.New("send needs -c, -t and text")
+		if *topic == "" || strings.TrimSpace(text) == "" {
+			return errors.New("send needs -t and text")
+		}
+		if *ch, err = to(*ch); err != nil {
+			return err
 		}
 		var mentions []string
-		for _, n := range strings.Split(*to, ",") {
+		for _, n := range strings.Split(*names, ",") {
 			if n = strings.TrimSpace(n); n != "" {
 				mentions = append(mentions, "@**"+n+"**")
 			}
@@ -165,11 +195,21 @@ func run(args []string) error {
 		if !*peek {
 			return c.MarkRead(ids)
 		}
-	case "read":
+	case "read", "orders":
 		ch := f.String("c", "", "channel")
+		owner = f.Bool("owner", false, "the owner's channel")
 		topic := f.String("t", "", "topic")
 		n := f.Int("n", 30, "messages")
+		if cmd == "orders" {
+			if len(rest) > 0 && rest[0] == "add" {
+				return run(append([]string{"-rc", *rc, "send", "-t", "standing orders"}, rest[1:]...))
+			}
+			*topic, *n = "standing orders", 100
+		}
 		if err := f.Parse(rest); err != nil {
+			return err
+		}
+		if *ch, err = to(*ch); err != nil {
 			return err
 		}
 		msgs, _, err := c.Messages([]narrowTerm{{"channel", *ch}, {"topic", *topic}}, "newest", *n, 0, false)
@@ -185,15 +225,23 @@ func run(args []string) error {
 	case "wait":
 		ch := f.String("c", "", "channel")
 		topic := f.String("t", "", "topic")
+		owner = f.Bool("owner", false, "the owner's channel")
 		timeout := f.Duration("timeout", time.Hour, "give up after")
 		if err := f.Parse(rest); err != nil {
+			return err
+		}
+		if *ch, err = to(*ch); err != nil {
 			return err
 		}
 		return wait(c, *ch, *topic, *timeout)
 	case "resolve", "unresolve":
 		ch := f.String("c", "", "channel")
+		owner = f.Bool("owner", false, "the owner's channel")
 		topic := f.String("t", "", "topic")
 		if err := f.Parse(rest); err != nil {
+			return err
+		}
+		if *ch, err = to(*ch); err != nil {
 			return err
 		}
 		from, to := *topic, resolvedPrefix+*topic
@@ -226,11 +274,30 @@ func run(args []string) error {
 			}
 		}
 		return toPorter(c, *rc, fmt.Sprintf("zm-%s role=%s host=%s session=%s", cmd, role, *h, *session))
-	case "join":
+	case "rollcall":
 		if len(rest) == 0 {
-			return errors.New("join needs a channel")
+			return errors.New("rollcall needs text")
 		}
-		return toPorter(c, *rc, "zm-join "+strings.Join(rest, " "))
+		return run(append([]string{"-rc", *rc, "send", "-t", "roll call"}, rest...))
+	case "where":
+		work, err := to("")
+		if err != nil {
+			return err
+		}
+		fmt.Printf("owner channel: %s\nwork channel:  %s\n", c.Channel, work)
+	case "join":
+		if len(rest) > 0 {
+			return toPorter(c, *rc, "zm-join "+strings.Join(rest, " "))
+		}
+		work, err := to("")
+		if err != nil {
+			return err
+		}
+		for _, ch := range []string{c.Channel, work} {
+			if err := toPorter(c, *rc, "zm-join "+ch); err != nil {
+				return err
+			}
+		}
 	case "restart":
 		role := *as
 		if len(rest) > 0 {

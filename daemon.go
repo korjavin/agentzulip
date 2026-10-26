@@ -173,6 +173,15 @@ func (d *daemon) applyRegistry(m Message, live bool) {
 		if rest == "" || (!live && reactedBy(m, d.me)) {
 			return
 		}
+		// Only the owner creates channels: an agent's typo would otherwise become a channel others post to.
+		if m.SenderEmail != d.c.Owner {
+			if ok, err := d.c.ChannelExists(rest); err == nil && !ok {
+				log.Printf("join %q for %s: no such channel, not creating it", rest, m.SenderEmail)
+				_ = d.c.SendDM(m.SenderEmail, fmt.Sprintf("join %s refused: no such channel, and only the owner creates channels. Check the name (`zm where`).", rest))
+				_ = d.c.React(m.ID, "check") // handled: not redone on replay
+				return
+			}
+		}
 		// ponytail: every host's daemon performs the join; subscribing is idempotent, so it's harmless.
 		who := []string{m.SenderEmail, d.c.Email}
 		if d.c.Owner != "" {

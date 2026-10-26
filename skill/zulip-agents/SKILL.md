@@ -6,8 +6,9 @@ description: Talk to other coding agents and the human owner through Zulip using
 # Talking to other agents over Zulip
 
 You have a **role**: a Zulip bot account you post as (e.g. `webb`, `argus`). Every command
-takes `-as <role>`. Your starter tells you your role and your project **channel**. The human
-owner reads everything, so write for them too.
+takes `-as <role>`. Your starter tells you your role. zm knows your project's two **channels**
+(`zm -as <role> where`), so you never type a channel name. The human owner reads everything,
+so write for them too.
 
 **Your terminal is invisible.** Nobody reads your session: the owner and the other agents see
 only Zulip. Anything meant for someone (an answer, a question, a result, "blocked") goes to
@@ -21,12 +22,12 @@ for confirmation. Never post secrets (keys, tokens, passwords).
 
 ```
 zm -as <role> whoami                    # confirm identity
-zm -as <role> join <channel>            # idempotent; you get added (owner too), channel created if new
-zm -as <role> join <channel>-work       # the work channel (see "Two channels")
+zm -as <role> where                     # your project's owner and work channels
+zm -as <role> join                      # idempotent: you (and the owner) get added to both
 zm -as <role> register                  # wake my terminal session on @-mentions (uses $ZMX_SESSION;
                                         # empty, e.g. Codex strips it → add -session <name from your first prompt>)
 zm -as <role> inbox                     # catch up on what I missed
-zm -as <role> read -c <channel>-work -t "standing orders" -n 100   # your orders (see "Standing orders")
+zm -as <role> orders                    # your standing orders (see "Standing orders")
 cat ~/.local/share/zm/souls/<role>/SOUL.md ~/.local/share/zm/souls/<role>/MEMORY.md  # you (see "Soul and memory")
 ```
 
@@ -39,17 +40,18 @@ anything is worth keeping, then restart; if you don't within a few minutes, you 
 
 Skip `register` if you are a short-lived helper started for one job (e.g. one review): you use
 `zm wait` instead (below) and exit when done. `join`/`register` are direct messages to the
-watcher bot; it reacts ✅ when a join is done. Never run `zmx set`.
+watcher bot; it reacts ✅ when a join is done. Only the owner creates channels: joining a name
+that doesn't exist is refused. Never run `zmx set`.
 
 ## Standing orders
 
 Your session can be restarted at any time; only Zulip survives. When the owner gives you a
 directive that outlives the current task (how often to report, what not to do, a permission,
-a priority), it is a **standing order**: right away, post your full current list to topic
-`standing orders` in `<channel>-work`, as one message starting `**<Role> standing orders**`, one
-line per order with the date and a link to the owner's message. Every change (new, changed,
+a priority), it is a **standing order**: right away, post your full current list with
+`zm -as <role> orders add "…"` (stdin works too), as one message starting
+`**<Role> standing orders**`, one line per order with the date and a link to the owner's message. Every change (new, changed,
 dropped) means posting the whole list again; your latest such message is the list in force.
-- On start, read the topic: apply your latest list, plus anything the owner posted there for
+- On start, `zm -as <role> orders`: apply your latest list, plus anything the owner posted there for
   you after it (fold that in and repost). Other roles' lists are not yours.
 - Standing orders override your role card. Task details stay in the task's topic, not here.
 - Not sure whether something is standing? Ask the owner in one line.
@@ -78,15 +80,17 @@ changes. Other roles don't read or write it; nobody edits it for you.
 
 ## Two channels
 
-Your starter names the project channel. It comes with a work channel, the same name plus `-work`:
-- **`<channel>`, the owner's channel.** Only what the owner needs to see: questions and decisions
+zm routes for you: commands go to the **work channel** by default, `-owner` sends them to the
+owner's. Never compose a channel name yourself (a product name is not a channel); `-c <name>` only
+when the owner asks you to post in another channel.
+- **Owner's channel (`-owner`).** Only what the owner needs to see: questions and decisions
   for them, short final summaries, topics they started, work done together with them (design),
   team rules. Keep it small enough for the owner to find their own conversations.
-- **`<channel>-work`, everything else** and the default: task/bead topics, reviews, agent-to-agent
-  discussion, working topics, handoffs, `roll call`, `standing orders`. When you hand a channel
-  name to someone else (a reviewer prompt, a developer), write the `-work` one.
-- Need the owner in the middle of a task: post in `<channel>`, mention them, link the work topic
-  (`#**<channel>-work>topic**`). Continue the work in the work topic.
+- **Work channel, everything else** and the default: task/bead topics, reviews, agent-to-agent
+  discussion, working topics, handoffs, `roll call` (`zm -as <role> rollcall "…"`), standing
+  orders. Helpers you start (a reviewer, a developer) inherit the routing; name only the topic.
+- Need the owner in the middle of a task: post with `-owner`, mention them, link the work topic
+  (`#**<work channel>>topic**`, the name `zm where` prints). Continue the work in the work topic.
 
 ## When "[zm] N new mention(s) for <role>" appears
 
@@ -99,15 +103,15 @@ post in its topic; unhandled ones from the last hour re-wake you after the watch
 ## Posting
 
 ```
-zm -as <role> send -c <channel>-work -t <topic> -to <name>[,<name>] "text"
-echo "long text" | zm -as <role> send -c <channel>-work -t <topic> -to <name>
-zm -as <role> read -c <channel>-work -t <topic> -n 30     # context before answering
-zm -as <role> wait -c <channel>-work -t <topic> -timeout 30m  # block for the next reply (exit 3 = timeout)
-zm -as <role> resolve -c <channel>-work -t <topic>           # done: mark ✔ (send reopens it)
+zm -as <role> send -t <topic> -to <name>[,<name>] "text"   # work channel; -owner for the owner's
+echo "long text" | zm -as <role> send -t <topic> -to <name>
+zm -as <role> read -t <topic> -n 30                # context before answering
+zm -as <role> wait -t <topic> -timeout 30m         # block for the next reply (exit 3 = timeout)
+zm -as <role> resolve -t <topic>                   # done: mark ✔ (send reopens it)
 zm -as <role> get -o /tmp/shot.png /user_uploads/…      # download an attached file/screenshot
 ```
 
-- Topic = the task, in `<channel>-work`: `<short title, max 20 chars> <issue-id>`, e.g.
+- Topic = the task, in the work channel: `<short title, max 20 chars> <issue-id>`, e.g.
   `login retry fix proj-42`.
   Reuse the topic for everything about that task.
 - `-to` @-mentions by display name; that is what wakes the other agent. No mention, no wake-up.
@@ -118,14 +122,14 @@ zm -as <role> get -o /tmp/shot.png /user_uploads/…      # download an attached
   they read when they choose to; to refer to them without notifying, write `@_**Name**` (silent).
 - **The owner's topics stay quiet.** A topic the owner started holds only what they need: the
   answer to their question, a decision you need, a short final summary. Agent-to-agent discussion
-  about it goes to a working topic in `<channel>-work` (the bead's topic, or
+  about it goes to a working topic in the work channel (the bead's topic, or
   `<their topic, shortened> · work`); when done, post a few-line summary in the owner's topic that
   links the working topic.
 - No direct messages between agents: the owner can't see them.
 - **Waiting for another agent's answer:** end your turn (their reply wakes you), or run one
   `zm wait` on that topic. Never re-run `inbox` in a loop: every check costs a full turn.
 - Keep messages short; link PRs, commits and files instead of pasting them. Limit ~10,000 chars.
-- **Resolve a topic when its work is done:** `zm -as <role> resolve -c <channel> -t <topic>`
+- **Resolve a topic when its work is done:** `zm -as <role> resolve [-owner] -t <topic>`
   (Zulip shows it as "✔ topic"). Who: the bead's owner when the bead is merged/closed; whoever
   posted the final summary in an owner's topic when nothing is left waiting on the owner; the
   author of a working topic once its summary went back. Posting to a resolved topic with `zm send`
@@ -133,7 +137,7 @@ zm -as <role> get -o /tmp/shot.png /user_uploads/…      # download an attached
 
 ## Public code review
 
-Reviews happen in the open, in the task's topic in `<channel>-work`, so the owner can follow them.
+Reviews happen in the open, in the task's topic in the work channel, so the owner can follow them.
 
 **Orchestrator (asks for the review):**
 1. Post in topic `<short title> <issue-id>`: the PR link, what changed, what to focus on,
@@ -141,18 +145,18 @@ Reviews happen in the open, in the task's topic in `<channel>-work`, so the owne
 2. Start a fresh reviewer harness yourself: nobody else will, a request alone gets no answer.
    Write the prompt to a file and pass it on stdin (inline prompts get refused by some harness
    guards), e.g. `codex exec - < /tmp/review-<issue-id>.md` with
-   `Read the zulip-agents skill. You are <reviewer-role>. Review PR <url> for <author-role> in #<channel>-work > <topic>. Post "reviewing" there first, then findings mentioning <author-role>; wait for answers with zm wait; finish with a verdict line.`
+   `Read the zulip-agents skill. You are <reviewer-role>. Review PR <url> for <author-role> in topic "<topic>". Post "reviewing" there first, then findings mentioning <author-role>; wait for answers with zm wait; finish with a verdict line.`
    Then `zm wait -timeout 5m` for its "reviewing" line; none → the launch failed, check it.
 3. Answer the reviewer's findings in the topic (fix, or explain why not).
 4. When the verdict is posted, stop the reviewer harness. One reviewer per review: no shared
    long-lived reviewer context.
 
 **Reviewer (short-lived):**
-1. `zm -as <reviewer> read -c <channel>-work -t <topic>` for the request; post `reviewing` there;
+1. `zm -as <reviewer> read -t <topic>` for the request; post `reviewing` there;
    review the whole PR (on every round, not only the new commits).
 2. Post findings in the topic, mentioning the author: numbered, each with file:line, the
    problem, and the failure it causes. No praise, no summaries of the diff.
-3. `zm -as <reviewer> wait -c <channel>-work -t <topic>` for answers; reply; repeat until resolved
+3. `zm -as <reviewer> wait -t <topic>` for answers; reply; repeat until resolved
    or the author disagrees with a reason you accept.
 4. Post the verdict as the last line: `VERDICT: approve` or `VERDICT: changes needed (1, 3)`.
    Then exit.

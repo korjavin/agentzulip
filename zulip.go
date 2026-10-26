@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,6 +20,7 @@ type Client struct {
 	Porter           string // [zm] porter: the daemon bot's email; agents DM it register/join requests
 	Owner            string // [zm] owner: the human's email (daemon: added to every channel it creates; both: unmentioned replies)
 	Restart          string // [zm] restart (daemon only): run as `RESTART SESSION` to restart an agent's session
+	Channel          string // [zm] channel, or $ZM_CHANNEL: the project's owner channel; work is Channel+"-work"
 	http             *http.Client
 }
 
@@ -93,6 +95,8 @@ func loadRC(path string) (*Client, error) {
 			c.Owner = v
 		case "zm.restart":
 			c.Restart = v
+		case "zm.channel":
+			c.Channel = v
 		}
 	}
 	if c.Email == "" || c.Key == "" || c.Site == "" {
@@ -216,6 +220,16 @@ func (c *Client) Subscribe(channel string, emails ...string) error {
 		"principals":    {jsonParam(emails)},
 		"invite_only":   {"true"},
 	}, nil)
+}
+
+// ChannelExists reports whether a channel of that name exists and is visible to this account.
+func (c *Client) ChannelExists(channel string) (bool, error) {
+	err := c.call("GET", "/get_stream_id", url.Values{"stream": {channel}}, nil)
+	var api *APIError
+	if errors.As(err, &api) && api.Status == 400 {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 func (c *Client) Subscriptions() ([]string, error) {
