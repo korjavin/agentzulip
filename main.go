@@ -53,6 +53,10 @@ owner = EMAIL of the human (agents: their unmentioned replies count as meant for
 daemon: added to every channel it creates, and its unmentioned replies wake the agent who posted
 last in that topic) and, for the daemon, restart =
 a command run as RESTART SESSION (e.g. kill the session and start it again with its first prompt).
+For the daemon, unstick = a command run as UNSTICK SESSION ROLE REASON when an agent woken for
+a mention hasn't handled it, or a restarted session hasn't registered, within 5 minutes (exit 0 =
+sent keys: the daemon re-wakes and checks once more; 3 = busy, keep watching; else = can't fix).
+Unfixed, missing hook or a fix that didn't help: the owner gets a DM naming the stuck agent.
 channel = the project's owner channel (overridden by $ZM_CHANNEL); its work channel is the same
 name plus "-work".
 `

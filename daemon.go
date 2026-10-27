@@ -29,6 +29,8 @@ type daemon struct {
 	host   string
 	subs   map[string]map[int]string // session -> userID -> role
 	nudged map[int]bool              // message ids already nudged in this process
+	watch  map[string]*watch         // session -> what it should do soon (see stuck.go)
+	fixed  chan fixResult            // unstick hook results, handled in the event loop
 }
 
 func runDaemon(c *Client, host string) error {
@@ -37,7 +39,7 @@ func runDaemon(c *Client, host string) error {
 		return err
 	}
 	log.Printf("zm daemon: %s on host %s", name, host)
-	d := &daemon{c: c, me: me, host: host, nudged: map[int]bool{}}
+	d := &daemon{c: c, me: me, host: host, nudged: map[int]bool{}, watch: map[string]*watch{}, fixed: make(chan fixResult, 16)}
 	for {
 		err := d.cycle()
 		log.Printf("event queue lost (%v), re-registering", err)
@@ -59,6 +61,7 @@ func (d *daemon) cycle() error {
 		return err
 	}
 	for {
+		d.checkStuck() // Events long-polls with heartbeats, so this runs at least about once a minute
 		evs, err := d.c.Events(q, last)
 		var api *APIError
 		if errors.As(err, &api) && api.Code == "BAD_EVENT_QUEUE_ID" {
@@ -81,7 +84,7 @@ func (d *daemon) cycle() error {
 }
 
 func (d *daemon) handle(msgs []Message) {
-	wake := map[string]map[string]int{} // session -> role -> new mentions
+	wake := map[string]map[string][]pending{} // session -> role -> new mentions
 	for _, m := range msgs {
 		if m.ChannelName() == "" { // a DM: requests to this bot
 			if m.SenderID != d.me {
@@ -92,7 +95,7 @@ func (d *daemon) handle(msgs []Message) {
 		ids := mentionedIDs(m.Content)
 		for _, uid := range ids {
 			if uid != m.SenderID && !d.nudged[m.ID] {
-				d.addWake(wake, uid)
+				d.addWake(wake, pending{m.ID, uid})
 			}
 		}
 		if len(ids) == 0 && d.c.Owner != "" && m.SenderEmail == d.c.Owner && !d.nudged[m.ID] {
@@ -100,7 +103,7 @@ func (d *daemon) handle(msgs []Message) {
 			if uid, err := lastOtherPoster(d.c, m); err != nil {
 				log.Printf("owner reply %d: %v", m.ID, err)
 			} else if uid > 0 {
-				d.addWake(wake, uid) // no-op if that poster has no registered session
+				d.addWake(wake, pending{m.ID, uid}) // no-op if that poster has no registered session
 			}
 		}
 		d.nudged[m.ID] = true
@@ -108,13 +111,13 @@ func (d *daemon) handle(msgs []Message) {
 	d.wake(wake)
 }
 
-func (d *daemon) addWake(wake map[string]map[string]int, uid int) {
+func (d *daemon) addWake(wake map[string]map[string][]pending, p pending) {
 	for session, roles := range d.subs {
-		if role, ok := roles[uid]; ok {
+		if role, ok := roles[p.userID]; ok {
 			if wake[session] == nil {
-				wake[session] = map[string]int{}
+				wake[session] = map[string][]pending{}
 			}
-			wake[session][role]++
+			wake[session][role] = append(wake[session][role], p)
 		}
 	}
 }
@@ -228,23 +231,32 @@ func (d *daemon) restart(m Message, kv map[string]string, rest string) {
 	}
 	sort.Strings(sessions)
 	for _, s := range sessions {
-		cmd := exec.Command(d.c.Restart, s)
-		if err := cmd.Start(); err != nil {
-			log.Printf("restart %s: %v", s, err)
+		if err := d.startSession(s, role, 0); err != nil {
 			_ = d.c.SendDM(m.SenderEmail, fmt.Sprintf("restart %s failed: %v", s, err))
 			return
 		}
-		// Until the new session registers itself, wakes would be typed into a booting TUI (Codex
-		// takes early keys as menu navigation). It reads its inbox right after registering.
-		delete(d.subs, s)
 		log.Printf("restarting %s (%s) for %s", s, role, m.SenderEmail)
-		go func() {
-			if err := cmd.Wait(); err != nil {
-				log.Printf("restart %s: %v", s, err)
-			}
-		}()
 	}
 	_ = d.c.React(m.ID, "check")
+}
+
+// startSession runs the restart command for s and expects the new session to register soon.
+func (d *daemon) startSession(s, role string, tries int) error {
+	cmd := exec.Command(d.c.Restart, s)
+	if err := cmd.Start(); err != nil {
+		log.Printf("restart %s: %v", s, err)
+		return err
+	}
+	// Until the new session registers itself, wakes would be typed into a booting TUI (Codex
+	// takes early keys as menu navigation). It reads its inbox right after registering.
+	delete(d.subs, s)
+	d.expect(s, role, nil, tries)
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			log.Printf("restart %s: %v", s, err)
+		}
+	}()
+	return nil
 }
 
 // backfill wakes sessions for recent mentions that are still unhandled.
@@ -253,7 +265,7 @@ func (d *daemon) backfill() error {
 	if err != nil {
 		return err
 	}
-	wake := map[string]map[string]int{}
+	wake := map[string]map[string][]pending{}
 	since := time.Now().Add(-backfillWindow).Unix()
 	for _, ch := range chans {
 		// ponytail: last 200 messages per channel; page further if channels get that busy in a day.
@@ -263,7 +275,7 @@ func (d *daemon) backfill() error {
 		}
 		for _, p := range unhandled(msgs, since) {
 			if !d.nudged[p.msgID] {
-				d.addWake(wake, p.userID)
+				d.addWake(wake, p)
 			}
 		}
 		for _, m := range msgs {
@@ -312,24 +324,28 @@ func reactedBy(m Message, uid int) bool {
 	return false
 }
 
-func (d *daemon) wake(wake map[string]map[string]int) {
+func (d *daemon) wake(wake map[string]map[string][]pending) {
 	sessions := make([]string, 0, len(wake))
 	for s := range wake {
 		sessions = append(sessions, s)
 	}
 	sort.Strings(sessions)
 	for _, s := range sessions {
-		for role, n := range wake[s] {
-			// Fixed text built only from validated names and a count: message content never
-			// reaches the terminal.
-			text := fmt.Sprintf("[zm] %d new mention(s) for %s. Run: zm -as %s inbox", n, role, role)
-			if err := nudge(s, text); err != nil {
+		for role, ps := range wake[s] {
+			if err := nudge(s, wakeText(role, len(ps))); err != nil {
 				log.Printf("wake %s: %v", s, err)
 				continue
 			}
-			log.Printf("woke %s (%s): %d", s, role, n)
+			log.Printf("woke %s (%s): %d", s, role, len(ps))
+			d.expect(s, role, ps, 0)
 		}
 	}
+}
+
+// wakeText is fixed text built only from validated names and a count: message content never
+// reaches the terminal.
+func wakeText(role string, n int) string {
+	return fmt.Sprintf("[zm] %d new mention(s) for %s. Run: zm -as %s inbox", n, role, role)
 }
 
 // nudge types text plus Enter into a terminal session. $ZM_NUDGE replaces the built-in zmx

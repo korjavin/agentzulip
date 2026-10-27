@@ -20,6 +20,7 @@ type Client struct {
 	Porter           string // [zm] porter: the daemon bot's email; agents DM it register/join requests
 	Owner            string // [zm] owner: the human's email (daemon: added to every channel it creates; both: unmentioned replies)
 	Restart          string // [zm] restart (daemon only): run as `RESTART SESSION` to restart an agent's session
+	Unstick          string // [zm] unstick (daemon only): run as `UNSTICK SESSION ROLE REASON` when an agent looks stuck
 	Channel          string // [zm] channel, or $ZM_CHANNEL: the project's owner channel; work is Channel+"-work"
 	http             *http.Client
 }
@@ -95,6 +96,8 @@ func loadRC(path string) (*Client, error) {
 			c.Owner = v
 		case "zm.restart":
 			c.Restart = v
+		case "zm.unstick":
+			c.Unstick = v
 		case "zm.channel":
 			c.Channel = v
 		}
