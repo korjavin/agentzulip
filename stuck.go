@@ -139,6 +139,7 @@ func (d *daemon) afterFix(r fixResult) {
 	w.busy = false
 	switch r.code {
 	case 3: // busy: the wake is queued in its input, check again later
+		log.Printf("unstick %s: %s", r.session, firstLine(r.out))
 		w.due = time.Now().Add(stuckAfter)
 	case 0:
 		log.Printf("unstick %s: %s", r.session, firstLine(r.out))
