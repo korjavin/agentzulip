@@ -59,6 +59,9 @@ sent keys: the daemon re-wakes and checks once more; 3 = busy, keep watching; el
 Unfixed, missing hook or a fix that didn't help: the owner gets a DM naming the stuck agent.
 channel = the project's owner channel (overridden by $ZM_CHANNEL); its work channel is the same
 name plus "-work".
+Optional, daemon and agents alike: boss = EMAIL of a second human (e.g. a non-technical client):
+their unmentioned replies count like the owner's, nothing else (no channel creation, restarts or
+alerts); frontdoor = ROLE that gets a human's unmentioned message in a topic no agent posted in.
 `
 
 var safe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
@@ -97,6 +100,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	c.Role = *as
 	if ch := os.Getenv("ZM_CHANNEL"); ch != "" {
 		c.Channel = ch
 	}
@@ -425,7 +429,8 @@ func lastOtherPoster(c *Client, m Message) (int, error) {
 
 // unreadReplies finds unread messages meant for me that Zulip doesn't flag as mentions:
 //   - quote-replies to my messages: only a silent mention, raw text starts `@_**Name|ID** [said](…)`;
-//   - the owner's messages without any mention in a topic where I posted last (see lastOtherPoster).
+//   - the owner's or boss's messages without any mention in a topic where I posted last (see
+//     lastOtherPoster), or, if I'm the front door, in a topic no one else posted in yet.
 //
 // ponytail: scans the newest 200 unread messages; a quote-reply quoted again also matches.
 func unreadReplies(c *Client) ([]Message, error) {
@@ -444,8 +449,8 @@ func unreadReplies(c *Client) ([]Message, error) {
 		case m.SenderID == me:
 		case strings.Contains(m.Content, mark):
 			out = append(out, m)
-		case c.Owner != "" && m.SenderEmail == c.Owner && !strings.Contains(m.Content, "@**") && !strings.Contains(m.Content, "[said](") && m.ChannelName() != "":
-			if uid, err := lastOtherPoster(c, m); err == nil && uid == me {
+		case c.human(m.SenderEmail) && !strings.Contains(m.Content, "@**") && !strings.Contains(m.Content, "[said](") && m.ChannelName() != "":
+			if uid, err := lastOtherPoster(c, m); err == nil && (uid == me || uid == 0 && c.Frontdoor != "" && c.Frontdoor == c.Role) {
 				out = append(out, m)
 			}
 		}

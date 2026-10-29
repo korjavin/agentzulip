@@ -22,6 +22,9 @@ type Client struct {
 	Restart          string // [zm] restart (daemon only): run as `RESTART SESSION` to restart an agent's session
 	Unstick          string // [zm] unstick (daemon only): run as `UNSTICK SESSION ROLE REASON` when an agent looks stuck
 	Channel          string // [zm] channel, or $ZM_CHANNEL: the project's owner channel; work is Channel+"-work"
+	Boss             string // [zm] boss: a second human (e.g. a non-technical client); unmentioned replies like the owner's, no owner powers
+	Frontdoor        string // [zm] frontdoor: the role a human's unmentioned message goes to when no agent posted in that topic yet
+	Role             string // the -as role this client runs as (not from the file)
 	http             *http.Client
 }
 
@@ -100,12 +103,22 @@ func loadRC(path string) (*Client, error) {
 			c.Unstick = v
 		case "zm.channel":
 			c.Channel = v
+		case "zm.boss":
+			c.Boss = v
+		case "zm.frontdoor":
+			c.Frontdoor = v
 		}
 	}
 	if c.Email == "" || c.Key == "" || c.Site == "" {
 		return nil, fmt.Errorf("%s: need email, key and site in [api]", path)
 	}
 	return c, sc.Err()
+}
+
+// human reports whether email is the owner's or the boss's: their messages without a mention are
+// meant for the agent they talk to in that topic.
+func (c *Client) human(email string) bool {
+	return email != "" && (email == c.Owner || email == c.Boss)
 }
 
 // call does one API request; params go in the query for GET and the form body otherwise.

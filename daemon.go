@@ -98,17 +98,32 @@ func (d *daemon) handle(msgs []Message) {
 				d.addWake(wake, pending{m.ID, uid})
 			}
 		}
-		if len(ids) == 0 && d.c.Owner != "" && m.SenderEmail == d.c.Owner && !d.nudged[m.ID] {
-			// The owner answering in a topic without a mention means the agent they talk to there.
+		if len(ids) == 0 && d.c.human(m.SenderEmail) && !d.nudged[m.ID] {
+			// A human answering in a topic without a mention means the agent they talk to there;
+			// in a topic no one else posted in yet, the front-door role (if set).
 			if uid, err := lastOtherPoster(d.c, m); err != nil {
 				log.Printf("owner reply %d: %v", m.ID, err)
 			} else if uid > 0 {
 				d.addWake(wake, pending{m.ID, uid}) // no-op if that poster has no registered session
+			} else if fd := roleUID(d.subs, d.c.Frontdoor); fd > 0 {
+				d.addWake(wake, pending{m.ID, fd})
 			}
 		}
 		d.nudged[m.ID] = true
 	}
 	d.wake(wake)
+}
+
+// roleUID finds the registered user running role; 0 if none (or role is empty).
+func roleUID(subs map[string]map[int]string, role string) int {
+	for _, roles := range subs {
+		for uid, r := range roles {
+			if role != "" && r == role {
+				return uid
+			}
+		}
+	}
+	return 0
 }
 
 func (d *daemon) addWake(wake map[string]map[string][]pending, p pending) {
