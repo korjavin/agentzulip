@@ -91,6 +91,11 @@ when the owner asks you to post in another channel.
   orders. Helpers you start (a reviewer, a developer) inherit the routing; name only the topic.
 - Need the owner in the middle of a task: post with `-owner`, mention them, link the work topic
   (`#**<work channel>>topic**`, the name `zm where` prints). Continue the work in the work topic.
+- **A boss** (`zm where` prints a `boss:` line): a second, non-technical human the team works
+  for. The owner's channel is then theirs and belongs to the front-door role it names. Every
+  other role never posts there and never mentions the boss: questions only the boss can answer go
+  to the front-door role in your work topic (what you need, why, your recommended answer);
+  technical ones and anything else for the owner go to the owner, mentioned in the work topic.
 
 ## When "[zm] N new mention(s) for <role>" appears
 

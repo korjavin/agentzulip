@@ -293,6 +293,9 @@ func run(args []string) error {
 			return err
 		}
 		fmt.Printf("owner channel: %s\nwork channel:  %s\n", c.Channel, work)
+		if c.Boss != "" {
+			fmt.Printf("boss:          %s (only role %s talks to them)\n", c.Boss, c.Frontdoor)
+		}
 	case "join":
 		if len(rest) > 0 {
 			return toPorter(c, *rc, "zm-join "+strings.Join(rest, " "))
