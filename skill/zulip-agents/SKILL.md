@@ -154,8 +154,10 @@ Reviews happen in the open, in the task's topic in the work channel, so the owne
 1. Post in topic `<short title> <issue-id>`: the PR link, what changed, what to focus on,
    mentioning the reviewer role (not the owner: the review is public, they read it if they want).
 2. Start a fresh reviewer harness yourself: nobody else will, a request alone gets no answer.
-   Write the prompt to a file and pass it on stdin (inline prompts get refused by some harness
-   guards), e.g. `codex exec - < /tmp/review-<issue-id>.md` with
+   Use the other harness than the one that wrote the code (Claude Code and Codex review each
+   other). Write the prompt to a file and pass it on stdin (inline prompts get refused by some
+   harness guards): `codex exec --dangerously-bypass-approvals-and-sandbox - < /tmp/review-<issue-id>.md`
+   or `claude -p --dangerously-skip-permissions < /tmp/review-<issue-id>.md`, with
    `Read the zulip-agents skill. You are <reviewer-role>. Review PR <url> for <author-role> in topic "<topic>". Post "reviewing" there first, then findings mentioning <author-role>; wait for answers with zm wait; finish with a verdict line.`
    Then `zm wait -timeout 5m` for its "reviewing" line; none → the launch failed, check it.
 3. Answer the reviewer's findings in the topic (fix, or explain why not).
