@@ -31,8 +31,8 @@ CHANNEL below defaults to the project's work channel; -owner picks the owner's c
   resolve [-c CHANNEL|-owner] -t TOPIC              mark the topic done (Zulip's "✔ " prefix)
   unresolve [-c CHANNEL|-owner] -t TOPIC            reopen it (send does this by itself)
   rollcall TEXT                                     post TEXT in the work channel's "roll call"
-  orders [add TEXT]                                 read the work channel's "standing orders"; add
-                                                    posts TEXT there
+  orders [-all] [add TEXT]                          my latest "standing orders" list plus the owner's
+                                                    posts after it (-all: every role's); add posts TEXT
   where                                             print the project's owner and work channels
   ack ID                                            react ✅ ("taken") to a message
   register [-session S] [-host H]                   ask the daemon to wake session S on mentions of me
@@ -208,11 +208,12 @@ func run(args []string) error {
 		owner = f.Bool("owner", false, "the owner's channel")
 		topic := f.String("t", "", "topic")
 		n := f.Int("n", 30, "messages")
+		all := f.Bool("all", false, "orders: every role's lists, not just mine")
 		if cmd == "orders" {
 			if len(rest) > 0 && rest[0] == "add" {
 				return run(append([]string{"-rc", *rc, "send", "-t", "standing orders"}, rest[1:]...))
 			}
-			*topic, *n = "standing orders", 100
+			*topic, *n = "standing orders", 1000
 		}
 		if err := f.Parse(rest); err != nil {
 			return err
@@ -226,6 +227,17 @@ func run(args []string) error {
 		}
 		if err != nil {
 			return err
+		}
+		if cmd == "orders" {
+			if *all {
+				msgs = msgs[max(0, len(msgs)-100):]
+			} else {
+				me, _, err := c.Me()
+				if err != nil {
+					return err
+				}
+				msgs = myOrders(msgs, me, c.Owner)
+			}
 		}
 		for _, m := range msgs {
 			printMsg(m)
@@ -492,6 +504,24 @@ func unanswered(c *Client, skip map[int]bool) ([]Message, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
+}
+
+// myOrders keeps what a role applies on start: its own latest standing-orders list and every
+// owner post after it (all owner posts if it has no list yet). Other roles' lists are noise.
+func myOrders(msgs []Message, me int, owner string) []Message {
+	start := 0
+	for i, m := range msgs {
+		if m.SenderID == me {
+			start = i
+		}
+	}
+	var out []Message
+	for i, m := range msgs[start:] {
+		if (i == 0 && m.SenderID == me) || (owner != "" && m.SenderEmail == owner) {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // toPorter sends a request to the daemon; register/join are idempotent, so no retry bookkeeping.

@@ -80,3 +80,28 @@ func TestHumanAndFrontdoor(t *testing.T) {
 		t.Fatal("roleUID")
 	}
 }
+
+func TestMyOrders(t *testing.T) {
+	msgs := []Message{
+		{ID: 1, SenderID: 5, Content: "my old list"},
+		{ID: 2, SenderEmail: "o@x", SenderID: 9, Content: "owner before"},
+		{ID: 3, SenderID: 6, Content: "other role's list"},
+		{ID: 4, SenderID: 5, Content: "my new list"},
+		{ID: 5, SenderID: 6, Content: "other role again"},
+		{ID: 6, SenderEmail: "o@x", SenderID: 9, Content: "owner after"},
+	}
+	var got []int
+	for _, m := range myOrders(msgs, 5, "o@x") {
+		got = append(got, m.ID)
+	}
+	if !reflect.DeepEqual(got, []int{4, 6}) {
+		t.Fatalf("got %v", got)
+	}
+	got = nil
+	for _, m := range myOrders(msgs, 7, "o@x") { // no list yet: every owner post
+		got = append(got, m.ID)
+	}
+	if !reflect.DeepEqual(got, []int{2, 6}) {
+		t.Fatalf("no list: got %v", got)
+	}
+}
