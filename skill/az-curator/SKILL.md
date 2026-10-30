@@ -37,11 +37,16 @@ Never `zm send/ack/resolve/join/register`, never type into a session. Reading is
 1. **Scope**: project slug(s), channel pair, owner/reviewer/daemon display names, window (default:
    since the newest `*-az-curator.md`, else the daemon's first start in the journal).
 2. **Close the loop** on the last audit (curator step 2).
-3. **Extract first, read second.** Run the five scripts into your scratch dir and read their output;
+3. **Digest first.** If `audit/*-az-digest/digest.md` exists and covers the window, it IS your reading
+   of the transcripts: take its ranked problems as candidate findings, check the ones you'll act on
+   against `findings.md` evidence (grep by message id / unit) and the numbers from the cheap scripts
+   below, and open raw transcripts only for a finding that stays doubtful. Don't re-read what it
+   already covered. No digest, or a window it doesn't cover → make one (`OUTSOURCE.md`) or go on:
+4. **Extract first, read second.** Run the five scripts into your scratch dir and read their output;
    they are small and structured — most findings come out of them with a number and a pointer.
    Spawn reader subagents (curator step 4) only for prose questions the scripts can't answer
    (why a developer chose X), one per question, with transcript paths and the exact question.
-4. **Judge, report, apply** as the curator does (steps 5–7). Project files behind a PR;
+5. **Judge, report, apply** as the curator does (steps 5–7). Project files behind a PR;
    skill/role-card/launcher changes to their source repos; subagent mode applies nothing.
 
 ## Lenses
