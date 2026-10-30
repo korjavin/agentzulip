@@ -63,8 +63,8 @@ No file locking, no custom dashboard, no database, no plugin system. Use your no
   refreshes it on its own, typically the background app server (`codex app-server`, started by the
   Codex app or `codex agents`), leaves new sessions holding a dead token, however often you log in
   again. Stop it with `codex app-server daemon stop` before starting a Codex team, then log in once.
-  Several Codex sessions starting at the same moment race the same way: start them a few seconds
-  about 15 s apart.
+  Several Codex sessions starting at the same moment race the same way: start them about 15 s
+  apart.
 
 ## License
 
