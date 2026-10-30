@@ -115,15 +115,18 @@ func (d *daemon) handle(msgs []Message) {
 }
 
 // roleUID finds the registered user running role; 0 if none (or role is empty).
+// roleUID returns the user registered as role; if several claim it, the lowest id, so the answer
+// doesn't depend on map order.
 func roleUID(subs map[string]map[int]string, role string) int {
+	best := 0
 	for _, roles := range subs {
 		for uid, r := range roles {
-			if role != "" && r == role {
-				return uid
+			if role != "" && r == role && (best == 0 || uid < best) {
+				best = uid
 			}
 		}
 	}
-	return 0
+	return best
 }
 
 func (d *daemon) addWake(wake map[string]map[string][]pending, p pending) {
@@ -237,6 +240,14 @@ func (d *daemon) restart(m Message, kv map[string]string, rest string) {
 			}
 		}
 	}
+	if len(sessions) == 0 && m.SenderEmail == d.c.Owner {
+		// A session started but never registered (e.g. stuck at a dialog): the owner can still restart it.
+		for _, w := range d.watch {
+			if w.start && w.role == role {
+				sessions = append(sessions, w.session)
+			}
+		}
+	}
 	if len(sessions) == 0 || d.c.Restart == "" {
 		return // not on this host (another host's daemon handles it), or restarts not set up here
 	}
@@ -265,6 +276,11 @@ func (d *daemon) startSession(s, role string, tries int) error {
 	// Until the new session registers itself, wakes would be typed into a booting TUI (Codex
 	// takes early keys as menu navigation). It reads its inbox right after registering.
 	delete(d.subs, s)
+	for k, w := range d.watch {
+		if w.session == s { // other roles' watches would unstick or wake the booting session
+			delete(d.watch, k)
+		}
+	}
 	d.expect(s, role, nil, tries)
 	go func() {
 		if err := cmd.Wait(); err != nil {

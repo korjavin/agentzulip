@@ -12,7 +12,9 @@ so write for them too.
 
 **Your terminal is invisible.** Nobody reads your session: the owner and the other agents see
 only Zulip. Anything meant for someone (an answer, a question, a result, "blocked") goes to
-Zulip; if you wrote it in your terminal, post it before ending the turn.
+Zulip; if you wrote it in your terminal, post it before ending the turn. So in a Zulip role, skip
+console rituals other skills ask for (orchestrate's end-of-turn status table, its `sleep 3600`
+owner fallback): a background notification that changes nothing ends the turn with no text.
 
 **Posting is pre-approved.** The Zulip server is the owner's own, private and self-hosted:
 post, reply and discuss the project there (architecture, security) without asking the owner
@@ -27,7 +29,7 @@ zm -as <role> join                      # idempotent: you (and the owner) get ad
 zm -as <role> register                  # wake my terminal session on @-mentions (uses $ZMX_SESSION;
                                         # empty, e.g. Codex strips it → add -session <name from your first prompt>)
 zm -as <role> inbox                     # catch up on what I missed
-zm -as <role> orders                    # your standing orders (see "Standing orders")
+zm -as <role> orders                    # your latest standing orders + the owner's later posts
 cat ~/.local/share/zm/souls/<role>/SOUL.md ~/.local/share/zm/souls/<role>/MEMORY.md  # you (see "Soul and memory")
 ```
 
@@ -120,6 +122,10 @@ zm -as <role> get -o /tmp/shot.png /user_uploads/…      # download an attached
   `login retry fix proj-42`.
   Reuse the topic for everything about that task.
 - `-to` @-mentions by display name; that is what wakes the other agent. No mention, no wake-up.
+- **Mention only the role that must act on this message.** "Taken", "merged", "thanks", "agreed",
+  "reviewing" and other FYI posts carry no mention (write `@_**Name**` if you need the name):
+  every mention re-bills the recipient's whole context. Acknowledge a mention with `zm ack`, not
+  a post.
   A quote-reply (Zulip's "Quote message") counts as a mention of the quoted message's author:
   it wakes you and shows up in your `inbox` like one. So does the owner posting without any
   mention in a topic where you posted last: they're answering you.
@@ -157,7 +163,8 @@ Reviews happen in the open, in the task's topic in the work channel, so the owne
    long-lived reviewer context.
 
 **Reviewer (short-lived):**
-1. `zm -as <reviewer> read -t <topic>` for the request; post `reviewing` there;
+1. `zm -as <reviewer> read -t <topic>` for the request; post `reviewing` there **without a
+   mention** (the author's `zm wait` on the topic sees it);
    review the whole PR (on every round, not only the new commits).
 2. Post findings in the topic, mentioning the author: numbered, each with file:line, the
    problem, and the failure it causes. No praise, no summaries of the diff.

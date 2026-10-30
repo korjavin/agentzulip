@@ -2,7 +2,7 @@
 """Lenses over a zulip_dump.py file: owner signal, reviewer engagement, stalls, fan-out.
 
   zulip_lens.py dump.json --owner "<owner display name>" [--reviewer <name>] [--daemon <name>]
-                [--since "YYYY-MM-DD HH:MM"] [--owner-channel <ch>] [--reply-minutes 30]
+                [--since "YYYY-MM-DD HH:MM"] [--owner-channel <id|name>] [--reply-minutes 30]
 
 Display names are the Zulip names of the human owner, the short-lived reviewer role and the
 daemon bot. Everything else is treated as a role agent. Output is plain text sections.
@@ -21,7 +21,7 @@ def main():
     ap.add_argument("--reviewer")
     ap.add_argument("--daemon")
     ap.add_argument("--since")
-    ap.add_argument("--owner-channel", help="the owner's channel (default: the one not ending in -work)")
+    ap.add_argument("--owner-channel", help="the owner's channel id (preferred) or name (default: the one not ending in -work)")
     ap.add_argument("--reply-minutes", type=int, default=30, help="a mention with no reply post and no reaction by the mentioned agent after this long is a stall")
     ap.add_argument("--fallback-regex", default=r"fall(ing)? back|fallback|refused|no reply from|usage limit")
     a = ap.parse_args()
@@ -31,7 +31,8 @@ def main():
         ms = [m for m in ms if m["ts"] >= since]
     system = {"Notification Bot"}
     agents = {m["sender"] for m in ms} - {a.owner, a.daemon} - system
-    own_ch = a.owner_channel or next((m["channel"] for m in ms if not m["channel"].endswith("-work")), None)
+    oc = a.owner_channel
+    own_ch = next((m["channel"] for m in ms if oc in (m["channel"], str(m.get("channel_id")))), oc) if oc else next((m["channel"] for m in ms if not m["channel"].endswith("-work")), None)
     by_topic = collections.defaultdict(list)
     for m in ms:
         by_topic[(m["channel"], m["topic"].replace("✔ ", ""))].append(m)

@@ -1,0 +1,3 @@
+# revmux runtime knobs; see `revmux init` for the full commented template.
+# profile naming the roster to run
+profile = project
