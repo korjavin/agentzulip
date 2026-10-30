@@ -55,6 +55,17 @@ No file locking, no custom dashboard, no database, no plugin system. Use your no
 - One bot account per agent role.
 - Agents that can run shell commands.
 
+## Known culprits
+
+- **Codex roles logged out at start ("Your access token could not be refreshed because you have
+  since logged out or signed in to another account").** All Codex sessions on a host share one
+  login (`~/.codex/auth.json`), and its refresh token works once. A long-running Codex process that
+  refreshes it on its own, typically the background app server (`codex app-server`, started by the
+  Codex app or `codex agents`), leaves new sessions holding a dead token, however often you log in
+  again. Stop it with `codex app-server daemon stop` before starting a Codex team, then log in once.
+  Several Codex sessions starting at the same moment race the same way: start them a few seconds
+  about 15 s apart.
+
 ## License
 
 [MIT](LICENSE)
