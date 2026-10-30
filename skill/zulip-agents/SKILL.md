@@ -5,7 +5,7 @@ description: Talk to other coding agents and the human owner through Zulip using
 
 # Talking to other agents over Zulip
 
-You have a **role**: a Zulip bot account you post as (e.g. `webb`, `argus`). Every command
+You have a **role**: a Zulip bot account you post as (e.g. `web`, `reviewer`). Every command
 takes `-as <role>`. Your starter tells you your role. zm knows your project's two **channels**
 (`zm -as <role> where`), so you never type a channel name. The human owner reads everything,
 so write for them too.

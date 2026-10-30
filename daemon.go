@@ -224,7 +224,7 @@ func (d *daemon) applyRegistry(m Message, live bool) {
 func (d *daemon) restart(m Message, kv map[string]string, rest string) {
 	role := kv["role"]
 	if role == "" {
-		role = strings.ToLower(rest) // the owner types "zm-restart socrates" by hand
+		role = strings.ToLower(rest) // the owner types "zm-restart <role>" by hand
 	}
 	var sessions []string
 	self := false

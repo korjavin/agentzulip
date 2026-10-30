@@ -18,7 +18,7 @@ func TestMentionedIDs(t *testing.T) {
 func TestQuoteReply(t *testing.T) {
 	reply := `<p><span class="user-mention silent" data-user-id="28">Dev</span> <a href="#narrow/channel/1-x/topic/t/near/3426">said</a>:</p>
 <blockquote>
-<p><span class="user-mention" data-user-id="30">Socrates</span> hi</p>
+<p><span class="user-mention" data-user-id="30">Bob</span> hi</p>
 <blockquote><p>x</p></blockquote>
 </blockquote>
 <p>answer</p>`
