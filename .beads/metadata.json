@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "agentzulip",
+  "project_id": "25dc398d-ba6b-430d-888e-cef86a7f8c30"
+}
