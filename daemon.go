@@ -276,6 +276,11 @@ func (d *daemon) startSession(s, role string, tries int) error {
 	// Until the new session registers itself, wakes would be typed into a booting TUI (Codex
 	// takes early keys as menu navigation). It reads its inbox right after registering.
 	delete(d.subs, s)
+	for k, w := range d.watch {
+		if w.session == s { // other roles' watches would unstick or wake the booting session
+			delete(d.watch, k)
+		}
+	}
 	d.expect(s, role, nil, tries)
 	go func() {
 		if err := cmd.Wait(); err != nil {

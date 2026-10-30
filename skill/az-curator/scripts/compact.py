@@ -27,14 +27,15 @@ def text_of(c):
     return "\n".join(out)
 
 
-def compact(path):
-    lines, roles = [], {}
+def compact(path, since=""):
+    lines, roles, secret = [], {}, False
     for raw in open(path, errors="replace"):
         try:
             o = json.loads(raw)
         except ValueError:
             continue
         m, ts = o.get("message") or {}, (o.get("timestamp") or "")[:16].replace("T", " ")
+        old = ts < since  # before the window: still read for the role, not kept
         if o.get("type") == "user":
             c = m.get("content")
             if isinstance(c, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in c):
@@ -42,13 +43,19 @@ def compact(path):
                     if isinstance(b, dict) and b.get("type") == "tool_result":
                         t = text_of(b.get("content")).strip()
                         lim = ERR if b.get("is_error") or "denied" in t[:300] else RESULT
-                        lines.append(f"  -> {'ERROR ' if b.get('is_error') else ''}{t[:lim]}")
+                        if secret:
+                            t = "[redacted: output of a secret store]"
+                        if not old:
+                            lines.append(f"  -> {'ERROR ' if b.get('is_error') else ''}{t[:lim]}")
+                secret = False
             else:
                 t = text_of(c).strip()
-                if t:
+                if t and not old:
                     lines.append(f"[{ts}] USER: {t[:3000]}")
         elif o.get("type") == "assistant":
             for b in m.get("content") or []:
+                if old and b.get("type") == "text":
+                    continue
                 if b.get("type") == "text" and b["text"].strip():
                     lines.append(f"[{ts}] AGENT: {b['text'].strip()[:3000]}")
                 elif b.get("type") == "tool_use":
@@ -56,8 +63,10 @@ def compact(path):
                     arg = inp.get("command") or inp.get("description") or inp.get("prompt") or json.dumps(inp)[:CALL]
                     for r in ROLE.findall(str(arg)):
                         roles[r] = roles.get(r, 0) + 1
-                    lines.append(f"[{ts}] CALL {b.get('name')}: {str(arg)[:CALL]}")
-        elif o.get("type") == "system" and "compact" in str(o.get("subtype", "")):
+                    secret = secret or bool(re.search(r"\b(kv get|stash)\b", str(arg)))
+                    if not old:
+                        lines.append(f"[{ts}] CALL {b.get('name')}: {str(arg)[:CALL]}")
+        elif o.get("type") == "system" and "compact" in str(o.get("subtype", "")) and not old:
             lines.append(f"[{ts}] (context compacted)")
     return "\n".join(lines), roles
 
@@ -77,7 +86,7 @@ def main():
         for main_t in glob.glob(os.path.join(d, "*.jsonl")):
             if os.path.getmtime(main_t) < since:
                 continue
-            body, roles = compact(main_t)
+            body, roles = compact(main_t, a.since)
             if not roles:
                 continue  # not a role agent's session (the owner's own sessions)
             role = max(roles, key=roles.get)
@@ -85,7 +94,7 @@ def main():
             units = [(f"{role}.{sid[:8]}", body)]
             for sub in sorted(glob.glob(os.path.join(d, sid, "subagents", "*.jsonl"))):
                 if os.path.getmtime(sub) >= since:
-                    units.append((f"{role}.{sid[:8]}.sub-{os.path.basename(sub)[:-6][-8:]}", compact(sub)[0]))
+                    units.append((f"{role}.{sid[:8]}.sub-{os.path.basename(sub)[:-6][-8:]}", compact(sub, a.since)[0]))
             for name, text in units:
                 for i in range(0, max(len(text), 1), CHUNK):
                     part = text[i:i + CHUNK]

@@ -65,18 +65,18 @@ func itoa(i int) string { return string(rune('0' + i)) }
 
 func TestHumanAndFrontdoor(t *testing.T) {
 	old := &Client{Owner: "dev@x"} // a config without boss/frontdoor behaves as before
-	if !old.human("dev@x") || old.human("") || old.human("rob@x") {
+	if !old.human("dev@x") || old.human("") || old.human("boss@x") {
 		t.Fatal("owner-only config")
 	}
 	if (&Client{}).human("") {
 		t.Fatal("empty owner must match nobody")
 	}
-	c := &Client{Owner: "dev@x", Boss: "rob@x"}
-	if !c.human("rob@x") || !c.human("dev@x") || c.human("bot@x") {
+	c := &Client{Owner: "dev@x", Boss: "boss@x"}
+	if !c.human("boss@x") || !c.human("dev@x") || c.human("bot@x") {
 		t.Fatal("boss counts as human")
 	}
-	subs := map[string]map[int]string{"s.paige": {7: "paige"}, "s.vito": {8: "vito"}}
-	if roleUID(subs, "paige") != 7 || roleUID(subs, "") != 0 || roleUID(subs, "hawk") != 0 {
+	subs := map[string]map[int]string{"s.front": {7: "front"}, "s.web": {8: "web"}}
+	if roleUID(subs, "front") != 7 || roleUID(subs, "") != 0 || roleUID(subs, "nobody") != 0 {
 		t.Fatal("roleUID")
 	}
 }

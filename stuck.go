@@ -24,7 +24,8 @@ import (
 
 const (
 	stuckAfter = 5 * time.Minute
-	busyLimit  = time.Hour // still unhandled after this long while "busy" = stuck too
+	noHookWait = 25 * time.Minute // without an unstick hook only the owner can help: don't DM about a merely busy agent
+	busyLimit  = time.Hour        // still unhandled after this long while "busy" = stuck too
 	hookLimit  = 3 * time.Minute
 )
 
@@ -37,6 +38,7 @@ type watch struct {
 	due     time.Time
 	tries   int  // unstick fixes that already ran for this incident
 	busy    bool // the hook is running
+	alerted bool // start watch the owner was told about: kept so `zm-restart <role>` still finds the session
 }
 
 type fixResult struct {
@@ -54,6 +56,7 @@ func (d *daemon) expect(s, role string, msgs []pending, tries int) {
 	k := watchKey(s, role)
 	if w := d.watch[k]; w != nil && !w.start && msgs != nil {
 		w.msgs = append(w.msgs, msgs...) // another wake while the first is still pending
+		w.due = now.Add(stuckAfter)      // the new mention gets its own grace period
 		return
 	}
 	d.watch[k] = &watch{session: s, role: role, start: msgs == nil, msgs: msgs, since: now, due: now.Add(stuckAfter), tries: tries}
@@ -72,6 +75,12 @@ func (d *daemon) checkStuck() {
 	now := time.Now()
 	for k, w := range d.watch {
 		s := w.session
+		if w.alerted {
+			if done, _ := d.progressed(w); done {
+				delete(d.watch, k)
+			}
+			continue
+		}
 		if w.busy || now.Before(w.due) {
 			continue
 		}
@@ -89,9 +98,12 @@ func (d *daemon) checkStuck() {
 		if w.start {
 			reason = "started, never registered"
 		}
+		if d.c.Unstick == "" && now.Sub(w.since) < noHookWait {
+			w.due = w.since.Add(noHookWait)
+			continue
+		}
 		if d.c.Unstick == "" || w.tries > 0 || now.Sub(w.since) > busyLimit {
-			d.alert(w, reason, "")
-			delete(d.watch, k)
+			d.giveUp(k, w, reason, "")
 			continue
 		}
 		w.busy = true
@@ -164,8 +176,7 @@ func (d *daemon) afterFix(r fixResult) {
 		log.Printf("unstick %s: %s", s, firstLine(r.out))
 		if w.start {
 			if err := d.startSession(s, w.role, w.tries+1); err != nil {
-				d.alert(w, "restart after unstick failed", err.Error())
-				delete(d.watch, k)
+				d.giveUp(k, w, "restart after unstick failed", err.Error())
 			}
 			return
 		}
@@ -175,9 +186,19 @@ func (d *daemon) afterFix(r fixResult) {
 			log.Printf("wake %s: %v", s, err)
 		}
 	default:
-		d.alert(w, "unstick couldn't fix it", r.out)
-		delete(d.watch, k)
+		d.giveUp(k, w, "unstick couldn't fix it", r.out)
 	}
+}
+
+// giveUp tells the owner and stops checking. A start watch stays (marked) until the session
+// registers: it is how `zm-restart <role>` finds a session that never registered.
+func (d *daemon) giveUp(k string, w *watch, reason, out string) {
+	d.alert(w, reason, out)
+	if w.start {
+		w.alerted = true
+		return
+	}
+	delete(d.watch, k)
 }
 
 func (d *daemon) alert(w *watch, reason, out string) {
@@ -213,7 +234,7 @@ func runHook(hook, s, role, reason string) (string, int) {
 	err := cmd.Run()
 	var exit *exec.ExitError
 	switch {
-	case err == nil:
+	case err == nil, errors.Is(err, exec.ErrWaitDelay) && ctx.Err() == nil: // exited 0; an orphan holds the pipe
 		return out.String(), 0
 	case errors.As(err, &exit) && ctx.Err() == nil:
 		return out.String(), exit.ExitCode()

@@ -87,9 +87,10 @@ secrets, keys or tokens into your answer. "summary": 2-4 sentences of what happe
 
 # Credentials that can sit in tool calls/results, logs or chat: scrubbed before anything is sent.
 SECRET = re.compile(
-    r"(?i)(\b(?:api[_-]?key|key|token|secret|password|passwd)\s*[=:]\s*)\S+"
-    r"|(authorization:\s*(?:bearer|basic)\s+)\S+"
-    r"|\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})")
+    r"(?i)((?<![A-Za-z0-9])(?:api[_-]?key|key|token|secret|password|passwd)[\"']?\s*[=:]\s*[\"']?)[^\s\"',}]+"
+    r"|(authorization:\s*(?:bearer|basic)\s+|\s-u\s+)\S+"
+    r"|\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})"
+    r"|\b[A-Za-z0-9]{32,}\b")  # bare long tokens (a Zulip key is 32 chars)
 
 
 def redact(text):
