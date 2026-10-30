@@ -2,6 +2,6 @@
   "database": "dolt",
   "backend": "dolt",
   "dolt_mode": "embedded",
-  "dolt_database": "agentzulip",
-  "project_id": "25dc398d-ba6b-430d-888e-cef86a7f8c30"
+  "dolt_database": "az",
+  "project_id": "b3e7d6e3-1171-4506-9fed-3958934c143b"
 }
