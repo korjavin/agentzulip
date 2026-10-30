@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Read-only dump of Zulip channels to JSON (stdlib only).
 
-  zulip_dump.py --rc ~/.config/zm/<role>.zuliprc --channel <ch> [--channel <ch>-work] \
+  zulip_dump.py --rc ~/.config/zm/<role>.zuliprc --channel <id|name> [--channel <id|name>] \
       --since "2026-01-01 00:00" --out dump.json
+
+--channel takes a channel id (preferred: survives renames) or a name, which is resolved to its id
+first. Each row carries channel_id and the channel's current name.
 
 The rc is a zuliprc as zm reads it: [api] email, site, and key or key_cmd (a command that prints
 the key). Only GET /messages is called: nothing is sent, reacted to or marked read. The key is
@@ -29,7 +32,7 @@ def load_rc(path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--rc", required=True)
-    ap.add_argument("--channel", action="append", required=True)
+    ap.add_argument("--channel", action="append", required=True, help="channel id (preferred) or name")
     ap.add_argument("--since", required=True, help="UTC 'YYYY-MM-DD HH:MM'")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
@@ -37,13 +40,14 @@ def main():
     email, key, site = load_rc(a.rc)
     auth = base64.b64encode(f"{email}:{key}".encode()).decode()
 
-    def get(**params):
-        url = f"{site}/api/v1/messages?" + urllib.parse.urlencode(params)
+    def get(path="messages", **params):
+        url = f"{site}/api/v1/{path}?" + urllib.parse.urlencode(params)
         req = urllib.request.Request(url, headers={"Authorization": "Basic " + auth})
         return json.load(urllib.request.urlopen(req))
 
     out = {}
     for ch in a.channel:
+        ch = int(ch) if ch.isdigit() else get("get_stream_id", stream=ch)["stream_id"]
         anchor = "newest"
         while True:
             r = get(anchor=anchor, num_before=1000, num_after=0, apply_markdown="false",
@@ -51,7 +55,7 @@ def main():
             msgs = r["messages"]
             for m in msgs:
                 if m["timestamp"] >= since:
-                    out[m["id"]] = {"id": m["id"], "ts": m["timestamp"], "channel": ch, "topic": m["subject"],
+                    out[m["id"]] = {"id": m["id"], "ts": m["timestamp"], "channel_id": ch, "channel": m["display_recipient"], "topic": m["subject"],
                                     "sender": m["sender_full_name"], "sender_email": m["sender_email"],
                                     "text": m["content"],
                                     "reacted_by": sorted({(r.get("user") or {}).get("full_name") or str(r.get("user_id")) for r in m.get("reactions", [])})}
