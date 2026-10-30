@@ -70,6 +70,8 @@ def main():
     a = ap.parse_args()
     since = time.mktime(time.strptime(a.since, "%Y-%m-%d"))
     os.makedirs(a.out, exist_ok=True)
+    for old in glob.glob(os.path.join(a.out, "*.txt")):  # a narrower rerun must not keep old units
+        os.remove(old)
     total, n = 0, 0
     for d in a.dirs:
         for main_t in glob.glob(os.path.join(d, "*.jsonl")):

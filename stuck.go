@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -28,29 +29,34 @@ const (
 )
 
 type watch struct {
-	role  string
-	start bool      // waiting for the session to register after a (re)start
-	msgs  []pending // else: the mentions it was woken for
-	since time.Time // first expectation not met yet
-	due   time.Time
-	tries int  // unstick fixes that already ran for this incident
-	busy  bool // the hook is running
+	session string
+	role    string
+	start   bool      // waiting for the session to register after a (re)start
+	msgs    []pending // else: the mentions it was woken for
+	since   time.Time // first expectation not met yet
+	due     time.Time
+	tries   int  // unstick fixes that already ran for this incident
+	busy    bool // the hook is running
 }
 
 type fixResult struct {
-	session string
-	out     string
-	code    int // hook exit code, -1 = didn't run
+	w    *watch // the incident the hook ran for; a newer watch for the key makes the result stale
+	out  string
+	code int // hook exit code, -1 = didn't run
 }
 
-// expect records what session s should do within stuckAfter. msgs nil = register after a start.
+// Watches are per session and role: roles sharing a session are woken and checked separately.
+func watchKey(s, role string) string { return s + "\x00" + role }
+
+// expect records what role in session s should do within stuckAfter. msgs nil = register after a start.
 func (d *daemon) expect(s, role string, msgs []pending, tries int) {
 	now := time.Now()
-	if w := d.watch[s]; w != nil && !w.start && msgs != nil {
+	k := watchKey(s, role)
+	if w := d.watch[k]; w != nil && !w.start && msgs != nil {
 		w.msgs = append(w.msgs, msgs...) // another wake while the first is still pending
 		return
 	}
-	d.watch[s] = &watch{role: role, start: msgs == nil, msgs: msgs, since: now, due: now.Add(stuckAfter), tries: tries}
+	d.watch[k] = &watch{session: s, role: role, start: msgs == nil, msgs: msgs, since: now, due: now.Add(stuckAfter), tries: tries}
 }
 
 func (d *daemon) checkStuck() {
@@ -64,18 +70,19 @@ func (d *daemon) checkStuck() {
 		break
 	}
 	now := time.Now()
-	for s, w := range d.watch {
+	for k, w := range d.watch {
+		s := w.session
 		if w.busy || now.Before(w.due) {
 			continue
 		}
-		done, err := d.progressed(s, w)
+		done, err := d.progressed(w)
 		if err != nil {
 			log.Printf("stuck check %s: %v", s, err)
 			w.due = now.Add(time.Minute)
 			continue
 		}
 		if done {
-			delete(d.watch, s)
+			delete(d.watch, k)
 			continue
 		}
 		reason := "woken for a mention, nothing handled"
@@ -83,22 +90,27 @@ func (d *daemon) checkStuck() {
 			reason = "started, never registered"
 		}
 		if d.c.Unstick == "" || w.tries > 0 || now.Sub(w.since) > busyLimit {
-			d.alert(s, w, reason, "")
-			delete(d.watch, s)
+			d.alert(w, reason, "")
+			delete(d.watch, k)
 			continue
 		}
 		w.busy = true
 		log.Printf("%s (%s) looks stuck (%s): running unstick", s, w.role, reason)
-		go func(s, role, reason string) {
-			out, code := runHook(d.c.Unstick, s, role, reason)
-			d.fixed <- fixResult{s, out, code}
-		}(s, w.role, reason)
+		go func(w *watch, reason string) {
+			out, code := runHook(d.c.Unstick, w.session, w.role, reason)
+			d.fixed <- fixResult{w, out, code}
+		}(w, reason)
 	}
 }
 
-func (d *daemon) progressed(s string, w *watch) (bool, error) {
+func (d *daemon) progressed(w *watch) (bool, error) {
 	if w.start {
-		return d.subs[s] != nil, nil
+		for _, r := range d.subs[w.session] {
+			if r == w.role {
+				return true, nil
+			}
+		}
+		return false, nil
 	}
 	for _, p := range w.msgs {
 		ok, err := handled(d.c, p)
@@ -132,36 +144,44 @@ func handled(c *Client, p pending) (bool, error) {
 }
 
 func (d *daemon) afterFix(r fixResult) {
-	w := d.watch[r.session]
-	if w == nil {
+	w, s := r.w, r.w.session
+	k := watchKey(s, w.role)
+	if d.watch[k] != w {
+		log.Printf("unstick %s: result for an incident already replaced, ignored", s)
 		return
 	}
 	w.busy = false
+	// The agent may have recovered while the hook ran (3 min at most): then act on nothing.
+	if done, err := d.progressed(w); err == nil && done {
+		delete(d.watch, k)
+		return
+	}
 	switch r.code {
 	case 3: // busy: the wake is queued in its input, check again later
-		log.Printf("unstick %s: %s", r.session, firstLine(r.out))
+		log.Printf("unstick %s: %s", s, firstLine(r.out))
 		w.due = time.Now().Add(stuckAfter)
 	case 0:
-		log.Printf("unstick %s: %s", r.session, firstLine(r.out))
+		log.Printf("unstick %s: %s", s, firstLine(r.out))
 		if w.start {
-			if err := d.startSession(r.session, w.role, w.tries+1); err != nil {
-				d.alert(r.session, w, "restart after unstick failed", err.Error())
-				delete(d.watch, r.session)
+			if err := d.startSession(s, w.role, w.tries+1); err != nil {
+				d.alert(w, "restart after unstick failed", err.Error())
+				delete(d.watch, k)
 			}
 			return
 		}
 		w.tries++
 		w.due = time.Now().Add(stuckAfter)
-		if err := nudge(r.session, wakeText(w.role, len(w.msgs))); err != nil {
-			log.Printf("wake %s: %v", r.session, err)
+		if err := nudge(s, wakeText(w.role, len(w.msgs))); err != nil {
+			log.Printf("wake %s: %v", s, err)
 		}
 	default:
-		d.alert(r.session, w, "unstick couldn't fix it", r.out)
-		delete(d.watch, r.session)
+		d.alert(w, "unstick couldn't fix it", r.out)
+		delete(d.watch, k)
 	}
 }
 
-func (d *daemon) alert(s string, w *watch, reason, out string) {
+func (d *daemon) alert(w *watch, reason, out string) {
+	s := w.session
 	log.Printf("%s (%s) stuck: %s", s, w.role, reason)
 	if d.c.Owner == "" {
 		return
@@ -173,7 +193,7 @@ func (d *daemon) alert(s string, w *watch, reason, out string) {
 	if out = strings.TrimSpace(out); out != "" {
 		msg += "\n```text\n" + truncate(out, 3000) + "\n```"
 	}
-	msg += fmt.Sprintf("\nLook at it with `zmx attach %s`, or DM me `zm-restart %s`.", s, w.role)
+	msg += fmt.Sprintf("\nLook at it with `zmx attach %s`, or DM me `zm-restart %s` (kills the session and starts it again).", s, w.role)
 	if err := d.c.SendDM(d.c.Owner, msg); err != nil {
 		log.Printf("alert %s: %v", s, err)
 	}
@@ -185,6 +205,11 @@ func runHook(hook, s, role, reason string) (string, int) {
 	var out bytes.Buffer
 	cmd := exec.CommandContext(ctx, hook, s, role, reason)
 	cmd.Stdout, cmd.Stderr = &out, &out
+	// Kill the hook's whole process group at the deadline, and stop waiting for pipes its
+	// orphans hold: otherwise a hung child keeps Run from returning and the watch stays busy.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = 5 * time.Second
 	err := cmd.Run()
 	var exit *exec.ExitError
 	switch {

@@ -115,15 +115,18 @@ func (d *daemon) handle(msgs []Message) {
 }
 
 // roleUID finds the registered user running role; 0 if none (or role is empty).
+// roleUID returns the user registered as role; if several claim it, the lowest id, so the answer
+// doesn't depend on map order.
 func roleUID(subs map[string]map[int]string, role string) int {
+	best := 0
 	for _, roles := range subs {
 		for uid, r := range roles {
-			if role != "" && r == role {
-				return uid
+			if role != "" && r == role && (best == 0 || uid < best) {
+				best = uid
 			}
 		}
 	}
-	return 0
+	return best
 }
 
 func (d *daemon) addWake(wake map[string]map[string][]pending, p pending) {
@@ -234,6 +237,14 @@ func (d *daemon) restart(m Message, kv map[string]string, rest string) {
 				sessions = append(sessions, s)
 				self = self || roles[m.SenderID] == role
 				break
+			}
+		}
+	}
+	if len(sessions) == 0 && m.SenderEmail == d.c.Owner {
+		// A session started but never registered (e.g. stuck at a dialog): the owner can still restart it.
+		for _, w := range d.watch {
+			if w.start && w.role == role {
+				sessions = append(sessions, w.session)
 			}
 		}
 	}

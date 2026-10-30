@@ -12,7 +12,7 @@ chunk, a Zulip topic or a pack of small ones, a journal chunk) is read by the mo
 cached system prompt and returns JSON findings with evidence pointers. The rollup ranks them.
 The API key comes from stash (`kv get $OUTSOURCE_KEY_PATH`) and is never printed. Needs the `anthropic` package.
 """
-import argparse, collections, glob, json, os, subprocess, sys, time
+import argparse, collections, glob, json, os, re, subprocess, sys, time
 
 KEY = os.environ.get("OUTSOURCE_KEY_PATH", "")  # stash path of the API key, e.g. secrets/<team>/anthropic
 MODEL = "claude-opus-5-5"
@@ -85,8 +85,23 @@ secrets, keys or tokens into your answer. "summary": 2-4 sentences of what happe
 """
 
 
+# Credentials that can sit in tool calls/results, logs or chat: scrubbed before anything is sent.
+SECRET = re.compile(
+    r"(?i)(\b(?:api[_-]?key|key|token|secret|password|passwd)\s*[=:]\s*)\S+"
+    r"|(authorization:\s*(?:bearer|basic)\s+)\S+"
+    r"|\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})")
+
+
+def redact(text):
+    return SECRET.sub(lambda m: (m.group(1) or m.group(2) or "") + "[redacted]", text)
+
+
 def work_units(work):
-    """(custom_id, text) for every unit."""
+    """(custom_id, text) for every unit, secrets scrubbed."""
+    return [(cid, redact(text)) for cid, text in raw_units(work)]
+
+
+def raw_units(work):
     units = []
     for f in sorted(glob.glob(os.path.join(work, "units", "*.txt"))):
         units.append(("t:" + os.path.basename(f)[:-4], "CLAUDE TRANSCRIPT CHUNK of role session " + os.path.basename(f) + "\n\n" + open(f).read()))

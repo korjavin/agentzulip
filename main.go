@@ -64,7 +64,7 @@ their unmentioned replies count like the owner's, nothing else (no channel creat
 alerts); frontdoor = ROLE that gets a human's unmentioned message in a topic no agent posted in.
 `
 
-var safe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+var safe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`) // no leading "-": these reach commands as args
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -435,7 +435,8 @@ func lastOtherPoster(c *Client, m Message) (int, error) {
 		return 0, err
 	}
 	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].ID < m.ID && msgs[i].SenderID != m.SenderID {
+		// Humans (owner, boss) are skipped: an unmentioned reply is meant for the last AGENT here.
+		if msgs[i].ID < m.ID && msgs[i].SenderID != m.SenderID && !c.human(msgs[i].SenderEmail) {
 			return msgs[i].SenderID, nil
 		}
 	}
