@@ -20,6 +20,7 @@ bead's topic, start a **fresh `codex exec` as the reviewer role** and `zm wait` 
 
 | What | Where / how |
 |---|---|
+| **Outsourced digest** — read FIRST when present | `audit/<date>-az-digest/digest.md` (ranked problems, per role, ping-pong, owner friction) and `findings.md` (every finding with evidence pointers). Made by `scripts/compact.py` + `scripts/outsource.py` (Claude API batch, key in stash, ~$30 for a week): use it instead of reading transcripts yourself; open raw sources only to verify a finding you will act on |
 | **Zulip, both channels** — the primary record | `scripts/zulip_dump.py --rc <zuliprc> --channel <ch> --channel <ch>-work --since … --out dump.json` (GET only, key never printed), then `scripts/zulip_lens.py dump.json --owner <name> --reviewer <role> --daemon <name>` |
 | Daemon journal — wakes, restarts, backfill | `scripts/daemon_journal.py [--unit <unit>] --since … [--split <team restart time>]`, or `--file` on a saved `journalctl` dump |
 | Role sessions + developer subagents | `scripts/transcripts.py ~/.claude/projects/<slug> [<slug>--claude-worktrees-*…] --since … --owner <name> --reviewer <role>`. A `[zm] … mention(s)` prompt is the daemon, not the owner; the script separates them |
