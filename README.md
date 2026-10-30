@@ -59,12 +59,12 @@ No file locking, no custom dashboard, no database, no plugin system. Use your no
 
 - **Codex roles logged out at start ("Your access token could not be refreshed because you have
   since logged out or signed in to another account").** All Codex sessions on a host share one
-  login (`~/.codex/auth.json`), and its refresh token works once. A long-running Codex process that
-  refreshes it on its own, typically the background app server (`codex app-server`, started by the
-  Codex app or `codex agents`), leaves new sessions holding a dead token, however often you log in
-  again. Stop it with `codex app-server daemon stop` before starting a Codex team, then log in once.
-  Several Codex sessions starting at the same moment race the same way: start them about 15 s
-  apart.
+  login (`~/.codex/auth.json`), and its refresh token works once: whoever refreshes it first
+  leaves the others with a dead token, however often you log in again. Seen when a team's Codex
+  sessions all started at the same moment; start them about 15 s apart. If it keeps happening, stop
+  the other long-running Codex process sharing that login, the background app server
+  (`codex app-server daemon stop`; `codex exec` and the Codex app start it again), log in once and
+  start the team.
 
 ## License
 
