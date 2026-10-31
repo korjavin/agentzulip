@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -206,6 +207,9 @@ func run(args []string) error {
 			fmt.Println("(no unread mentions)")
 		}
 		if !*peek {
+			for id := range seen { // the mentions, not every reply in my topics
+				_ = c.React(id, readEmoji)
+			}
 			return c.MarkRead(ids)
 		}
 	case "read", "orders":
@@ -244,8 +248,15 @@ func run(args []string) error {
 				msgs = myOrders(msgs, me, c.Owner)
 			}
 		}
+		me, _, err := c.Me()
+		if err != nil {
+			return err
+		}
 		for _, m := range msgs {
 			printMsg(m)
+			if slices.Contains(mentionedIDs(m.Content), me) && !hasReaction(m, me, readEmoji) {
+				_ = c.React(m.ID, readEmoji)
+			}
 		}
 	case "wait":
 		ch := f.String("c", "", "channel")

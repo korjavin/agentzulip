@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -364,9 +365,20 @@ func unhandled(msgs []Message, since int64) []pending {
 	return out
 }
 
+// Marker reactions zm sets on its own: Porter's "woke the mentioned agent" and the agent's "zm
+// showed it to me". Neither means the agent handled the message, so reactedBy skips them.
+const (
+	wokeEmoji = "bell"
+	readEmoji = "eyes"
+)
+
+func hasReaction(m Message, uid int, emoji string) bool {
+	return slices.ContainsFunc(m.Reactions, func(r Reaction) bool { return r.UserID == uid && r.EmojiName == emoji })
+}
+
 func reactedBy(m Message, uid int) bool {
 	for _, r := range m.Reactions {
-		if r.UserID == uid {
+		if r.UserID == uid && r.EmojiName != wokeEmoji && r.EmojiName != readEmoji {
 			return true
 		}
 	}
@@ -386,6 +398,9 @@ func (d *daemon) wake(wake map[string]map[string][]pending) {
 				continue
 			}
 			log.Printf("woke %s (%s): %d", s, role, len(ps))
+			for _, p := range ps {
+				_ = d.c.React(p.msgID, wokeEmoji)
+			}
 			d.expect(s, role, ps, 0)
 		}
 	}

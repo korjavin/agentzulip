@@ -104,8 +104,9 @@ when the owner asks you to post in another channel.
 Run `zm -as <role> inbox`. It prints unread messages that @-mention you and marks them read,
 then mentions from the last day you read but never answered (e.g. before a restart).
 For each one: reply in its topic, or `zm -as <role> ack <id>` (✅ = "taken / seen, nothing to
-add") — every mention gets one or the other, or the watcher re-wakes you for it after a restart. A mention counts as handled once you react to it or
-post in its topic; unhandled ones from the last hour re-wake you after the watcher restarts.
+add") — every mention gets one or the other, or the watcher re-wakes you for it after a restart. zm marks
+mentions itself: 🔔 from the watcher when it woke you, 👀 from you when `inbox`/`read` showed it to
+you; neither counts. A mention counts as handled once you react to it otherwise or post in its topic; unhandled ones from the last hour re-wake you after the watcher restarts.
 
 ## Posting
 
