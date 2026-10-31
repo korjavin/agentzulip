@@ -220,11 +220,11 @@ func (d *daemon) alert(w *watch, reason, out string) {
 	}
 }
 
-func runHook(hook, s, role, reason string) (string, int) {
+func runHook(hook string, args ...string) (string, int) {
 	ctx, cancel := context.WithTimeout(context.Background(), hookLimit)
 	defer cancel()
 	var out bytes.Buffer
-	cmd := exec.CommandContext(ctx, hook, s, role, reason)
+	cmd := exec.CommandContext(ctx, hook, args...)
 	cmd.Stdout, cmd.Stderr = &out, &out
 	// Kill the hook's whole process group at the deadline, and stop waiting for pipes its
 	// orphans hold: otherwise a hung child keeps Run from returning and the watch stays busy.

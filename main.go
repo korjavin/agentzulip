@@ -58,6 +58,8 @@ a mention hasn't handled it, or a restarted session hasn't registered, within 5 
 sent keys: the daemon re-delivers the wake, or for a session that never registered runs restart
 again, and checks once more; 3 = busy, keep watching; else = can't fix). Unfixed or a fix that
 didn't help: the owner gets a DM naming the stuck agent; without a hook, after 25 minutes.
+For the daemon, harness = a command run as HARNESS ARG when the owner DMs it "zm-harness ARG"
+(e.g. switch the team between Claude Code and Codex); its output comes back as a DM.
 channel = the project's owner channel (overridden by $ZM_CHANNEL); its work channel is the same
 name plus "-work".
 Optional, daemon and agents alike: boss = EMAIL of a second human (e.g. a non-technical client):

@@ -21,6 +21,7 @@ type Client struct {
 	Owner            string // [zm] owner: the human's email (daemon: added to every channel it creates; both: unmentioned replies)
 	Restart          string // [zm] restart (daemon only): run as `RESTART SESSION` to restart an agent's session
 	Unstick          string // [zm] unstick (daemon only): run as `UNSTICK SESSION ROLE REASON` when an agent looks stuck
+	Harness          string // [zm] harness (daemon only): run as `HARNESS ARG` when the owner DMs `zm-harness ARG`
 	Channel          string // [zm] channel, or $ZM_CHANNEL: the project's owner channel; work is Channel+"-work"
 	Boss             string // [zm] boss: a second human (e.g. a non-technical client); unmentioned replies like the owner's, no owner powers
 	Frontdoor        string // [zm] frontdoor: the role a human's unmentioned message goes to when no agent posted in that topic yet
@@ -101,6 +102,8 @@ func loadRC(path string) (*Client, error) {
 			c.Restart = v
 		case "zm.unstick":
 			c.Unstick = v
+		case "zm.harness":
+			c.Harness = v
 		case "zm.channel":
 			c.Channel = v
 		case "zm.boss":
