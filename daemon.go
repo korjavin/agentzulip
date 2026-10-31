@@ -224,15 +224,17 @@ func (d *daemon) applyRegistry(m Message, live bool) {
 		if !live || d.c.Harness == "" || m.SenderEmail != d.c.Owner {
 			return
 		}
-		arg := strings.ToLower(strings.TrimSpace(rest))
-		if !safe.MatchString(arg) {
-			_ = d.c.SendDM(m.SenderEmail, "zm-harness needs one word, e.g. `zm-harness claude`")
-			return
+		args := strings.Fields(rest)
+		for _, a := range args {
+			if !hookArg.MatchString(a) {
+				_ = d.c.SendDM(m.SenderEmail, fmt.Sprintf("zm-harness: %q is not a plain word or key=value", a))
+				return
+			}
 		}
 		go func() {
-			out, code := runHook(d.c.Harness, arg)
-			log.Printf("harness %s: exit %d: %s", arg, code, firstLine(out))
-			_ = d.c.SendDM(m.SenderEmail, fmt.Sprintf("zm-harness %s on host %s: exit %d\n```text\n%s\n```", arg, d.host, code, truncate(strings.TrimSpace(out), 3000)))
+			out, code := runHook(d.c.Harness, args...)
+			log.Printf("harness %s: exit %d: %s", rest, code, firstLine(out))
+			_ = d.c.SendDM(m.SenderEmail, fmt.Sprintf("zm-harness %s on host %s: exit %d\n```text\n%s\n```", rest, d.host, code, truncate(strings.TrimSpace(out), 3000)))
 		}()
 		_ = d.c.React(m.ID, "check")
 	}

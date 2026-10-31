@@ -58,8 +58,9 @@ a mention hasn't handled it, or a restarted session hasn't registered, within 5 
 sent keys: the daemon re-delivers the wake, or for a session that never registered runs restart
 again, and checks once more; 3 = busy, keep watching; else = can't fix). Unfixed or a fix that
 didn't help: the owner gets a DM naming the stuck agent; without a hook, after 25 minutes.
-For the daemon, harness = a command run as HARNESS ARG when the owner DMs it "zm-harness ARG"
-(e.g. switch the team between Claude Code and Codex); its output comes back as a DM.
+For the daemon, harness = a command run as HARNESS ARGS... when the owner DMs it "zm-harness ARGS..."
+(words or key=value, e.g. "zm-harness codex effort=high webb": switch harnesses, models, effort);
+its output comes back as a DM.
 channel = the project's owner channel (overridden by $ZM_CHANNEL); its work channel is the same
 name plus "-work".
 Optional, daemon and agents alike: boss = EMAIL of a second human (e.g. a non-technical client):
@@ -67,7 +68,8 @@ their unmentioned replies count like the owner's, nothing else (no channel creat
 alerts); frontdoor = ROLE that gets a human's unmentioned message in a topic no agent posted in.
 `
 
-var safe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`) // no leading "-": these reach commands as args
+var safe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)     // no leading "-": these reach commands as args
+var hookArg = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._=-]*$`) // the owner's words for a hook: words or key=value
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
