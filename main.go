@@ -35,7 +35,7 @@ CHANNEL below defaults to the project's work channel; -owner picks the owner's c
   orders [-all] [add TEXT]                          my latest "standing orders" list plus the owner's
                                                     posts after it (-all: every role's); add posts TEXT
   where                                             print the project's owner and work channels
-  ack ID                                            react ✅ ("taken") to a message
+  ack ID [EMOJI]                                    react ✅ ("taken"), or EMOJI (e.g. working_on_it), to a message
   register [-session S] [-host H]                   ask the daemon to wake session S on mentions of me
   unregister [-session S] [-host H]                 stop that
   join [CHANNEL]                                    ask the daemon to add me (and the owner) to CHANNEL
@@ -287,13 +287,17 @@ func run(args []string) error {
 		return renameTopic(c, *ch, from, to)
 	case "ack":
 		var id int
-		if len(rest) != 1 {
-			return errors.New("ack needs a message id")
+		if len(rest) < 1 || len(rest) > 2 {
+			return errors.New("ack needs a message id and optionally an emoji name")
 		}
 		if _, err := fmt.Sscan(rest[0], &id); err != nil {
 			return err
 		}
-		return c.React(id, "check")
+		emoji := "check"
+		if len(rest) == 2 {
+			emoji = rest[1]
+		}
+		return c.React(id, emoji)
 	case "register", "unregister":
 		session := f.String("session", os.Getenv("ZMX_SESSION"), "terminal session to wake")
 		h := f.String("host", host, "host the session runs on")

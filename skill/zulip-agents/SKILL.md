@@ -105,7 +105,10 @@ Run `zm -as <role> inbox`. It prints unread messages that @-mention you and mark
 then mentions from the last day you read but never answered (e.g. before a restart).
 zm acknowledges for you: the watcher reacts 🔔 when it wakes you, and `inbox`/`read` react 👀 as
 you on each mention they show you, which counts as seen. Reply in the topic only when you have
-something to say; never `zm ack` a mention you read through zm. A mention counts as handled once
+something to say; never `zm ack` a mention you read through zm. When work on a mention will run
+past ~2 minutes before your reply, show it in one call first: `zm -as <role> ack <id> working_on_it`
+(🛠 building, testing), `thinking` (🤔 analysing, designing) or `hourglass` (⏳ waiting on someone or
+a long job). Your reply in the topic is the "done"; don't remove the reaction. A mention counts as handled once
 you react to it (👀 included) or post in its topic; unhandled ones from the last hour re-wake you after the watcher restarts.
 
 ## Posting
