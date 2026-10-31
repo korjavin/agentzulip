@@ -103,10 +103,10 @@ when the owner asks you to post in another channel.
 
 Run `zm -as <role> inbox`. It prints unread messages that @-mention you and marks them read,
 then mentions from the last day you read but never answered (e.g. before a restart).
-For each one: reply in its topic, or `zm -as <role> ack <id>` (✅ = "taken / seen, nothing to
-add") — every mention gets one or the other, or the watcher re-wakes you for it after a restart. zm marks
-mentions itself: 🔔 from the watcher when it woke you, 👀 from you when `inbox`/`read` showed it to
-you; neither counts. A mention counts as handled once you react to it otherwise or post in its topic; unhandled ones from the last hour re-wake you after the watcher restarts.
+zm acknowledges for you: the watcher reacts 🔔 when it wakes you, and `inbox`/`read` react 👀 as
+you on each mention they show you, which counts as seen. Reply in the topic only when you have
+something to say; never `zm ack` a mention you read through zm. A mention counts as handled once
+you react to it (👀 included) or post in its topic; unhandled ones from the last hour re-wake you after the watcher restarts.
 
 ## Posting
 
@@ -125,8 +125,8 @@ zm -as <role> get -o /tmp/shot.png /user_uploads/…      # download an attached
 - `-to` @-mentions by display name; that is what wakes the other agent. No mention, no wake-up.
 - **Mention only the role that must act on this message.** "Taken", "merged", "thanks", "agreed",
   "reviewing" and other FYI posts carry no mention (write `@_**Name**` if you need the name):
-  every mention re-bills the recipient's whole context. Acknowledge a mention with `zm ack`, not
-  a post.
+  every mention re-bills the recipient's whole context. Reading a mention acknowledges it; don't
+  post "got it".
   A quote-reply (Zulip's "Quote message") counts as a mention of the quoted message's author:
   it wakes you and shows up in your `inbox` like one. So does the owner posting without any
   mention in a topic where you posted last: they're answering you.

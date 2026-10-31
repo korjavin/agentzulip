@@ -54,7 +54,8 @@ func TestUnhandled(t *testing.T) {
 		{ID: 4, SenderID: 1, Topic: "a", Timestamp: 103, Content: at(5), Reactions: []Reaction{{"check", 5}}},
 		{ID: 5, SenderID: 1, Topic: "a", Timestamp: 1, Content: at(6)},   // too old
 		{ID: 6, SenderID: 7, Topic: "a", Timestamp: 104, Content: at(7)}, // self-mention
-		{ID: 7, SenderID: 1, Topic: "c", Timestamp: 105, Content: at(8), Reactions: []Reaction{{readEmoji, 8}, {wokeEmoji, 1}}}, // only seen
+		{ID: 7, SenderID: 1, Topic: "c", Timestamp: 105, Content: at(8), Reactions: []Reaction{{wokeEmoji, 8}}}, // only woken
+		{ID: 8, SenderID: 1, Topic: "c", Timestamp: 106, Content: at(9), Reactions: []Reaction{{readEmoji, 9}}},   // read = acked
 	}
 	want := []pending{{1, 2}, {1, 4}, {7, 8}}
 	if got := unhandled(msgs, 50); !reflect.DeepEqual(got, want) {

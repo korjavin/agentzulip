@@ -365,8 +365,8 @@ func unhandled(msgs []Message, since int64) []pending {
 	return out
 }
 
-// Marker reactions zm sets on its own: Porter's "woke the mentioned agent" and the agent's "zm
-// showed it to me". Neither means the agent handled the message, so reactedBy skips them.
+// Marker reactions zm sets on its own: Porter's "woke the mentioned agent" (not handled, so
+// reactedBy skips it) and the agent's "zm showed it to me" (the automatic ack: it counts).
 const (
 	wokeEmoji = "bell"
 	readEmoji = "eyes"
@@ -378,7 +378,7 @@ func hasReaction(m Message, uid int, emoji string) bool {
 
 func reactedBy(m Message, uid int) bool {
 	for _, r := range m.Reactions {
-		if r.UserID == uid && r.EmojiName != wokeEmoji && r.EmojiName != readEmoji {
+		if r.UserID == uid && r.EmojiName != wokeEmoji {
 			return true
 		}
 	}
